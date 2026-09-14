@@ -9,6 +9,7 @@ classification or reversibility rules change; every transcript is then read
 from the start again and existing rows are reconciled with the new rules.
 """
 
+import getpass
 import json
 import sqlite3
 from datetime import datetime
@@ -18,9 +19,27 @@ from reversibility import assess
 from shell_classify import is_read_only
 from store import DB_PATH, connect
 
-RULES_VERSION = "2"
+# Bumping this deletes every log-sourced row and re-extracts all transcripts
+# (cheap, a few seconds). Do it whenever what we extract, or how we judge it,
+# changes.
+RULES_VERSION = "3"
 TRANSCRIPTS_ROOT = Path.home() / ".claude" / "projects"
-AGENT_NAME = "claude-code"
+AGENT_BASE = "claude-code"
+
+
+def agent_name(entry: dict) -> str:
+    entrypoint = entry.get("entrypoint")
+    name = f"{AGENT_BASE} ({entrypoint})" if entrypoint else AGENT_BASE
+    if entry.get("isSidechain"):
+        name += " › subagent"
+    return name
+
+
+def current_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
 EXECUTE_TOOLS = {"Bash"}
@@ -129,6 +148,7 @@ def _base_note(session_id, reason) -> str:
 
 def parse_lines(path: Path, lines):
     """Yield one action dict per side-effect tool call. `lines` is (position, text)."""
+    user = current_user()
     for pos, line in lines:
         line = line.strip()
         if not line:
@@ -159,7 +179,8 @@ def parse_lines(path: Path, lines):
             reversible, reason = assess(action_type, name, tool_input, target, cwd)
             yield {
                 "timestamp": _to_epoch(timestamp),
-                "agent": AGENT_NAME,
+                "agent": agent_name(entry),
+                "user": user,
                 "source": "log",
                 "action_type": action_type,
                 "target": target,
@@ -175,6 +196,9 @@ def parse_lines(path: Path, lines):
                     "session_id": session_id,
                     "cwd": cwd,
                     "transcript": str(path),
+                    "entrypoint": entry.get("entrypoint"),
+                    "sidechain": bool(entry.get("isSidechain")),
+                    "version": entry.get("version"),
                 }),
                 "source_ref": block.get("id") or f"{path.name}:{pos}:{idx}",
             }
@@ -209,10 +233,10 @@ def find_transcripts(root: Path = TRANSCRIPTS_ROOT):
 
 INSERT_SQL = """
 INSERT OR IGNORE INTO actions
-    (timestamp, agent, source, action_type, target, amount, currency,
+    (timestamp, agent, user, source, action_type, target, amount, currency,
      artifact_link, reversible, attribution, confidence_note, raw_json, source_ref)
 VALUES
-    (:timestamp, :agent, :source, :action_type, :target, :amount, :currency,
+    (:timestamp, :agent, :user, :source, :action_type, :target, :amount, :currency,
      :artifact_link, :reversible, :attribution, :confidence_note, :raw_json, :source_ref)
 """
 
@@ -227,9 +251,11 @@ def ingest(conn: sqlite3.Connection, paths=None, full: bool = False) -> int:
     if paths is None:
         paths = find_transcripts()
     if full or _rules_changed(conn):
+        conn.execute("DELETE FROM actions WHERE source = 'log'")
         conn.execute("DELETE FROM parser_state")
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_version', ?)",
                      (RULES_VERSION,))
+        conn.commit()
     before = conn.total_changes
     for path in paths:
         row = conn.execute("SELECT byte_offset FROM parser_state WHERE path = ?", (str(path),)).fetchone()
@@ -275,6 +301,7 @@ def reconcile(conn: sqlite3.Connection):
             updates.append((new_rev, new_note, action_id))
     conn.executemany("DELETE FROM actions WHERE id = ?", doomed)
     conn.executemany("UPDATE actions SET reversible = ?, confidence_note = ? WHERE id = ?", updates)
+    conn.execute("UPDATE actions SET user = ? WHERE user IS NULL", (current_user(),))
     conn.commit()
     return len(doomed), len(updates)
 

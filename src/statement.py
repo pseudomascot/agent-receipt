@@ -41,9 +41,11 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         type_filter = request.args.get("type")
         if type_filter not in ACTION_TYPES:
             type_filter = None
+        agent_filter = request.args.get("agent") or None
+        user_filter = request.args.get("user") or None
         conn = db()
         try:
-            data = day_statement(conn, day, type_filter)
+            data = day_statement(conn, day, type_filter, agent_filter, user_filter)
             summary = build_summary(conn, day)
         finally:
             conn.close()

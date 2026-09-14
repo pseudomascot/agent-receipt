@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
     agent TEXT NOT NULL,
+    user TEXT,
     source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet')),
     action_type TEXT NOT NULL CHECK (action_type IN
         ('send_email', 'create_event', 'purchase', 'file_write', 'post', 'execute', 'other')),
@@ -65,4 +66,13 @@ def connect(db_path: Path = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns that older databases lack. CREATE TABLE IF NOT EXISTS won't."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(actions)")}
+    if "user" not in columns:
+        conn.execute("ALTER TABLE actions ADD COLUMN user TEXT")
+        conn.commit()

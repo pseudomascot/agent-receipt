@@ -4,20 +4,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from log_parser import RULES_VERSION, classify, ingest, parse_file, reconcile  # noqa: E402
+from log_parser import RULES_VERSION, classify, current_user, ingest, parse_file, reconcile  # noqa: E402
 from store import connect  # noqa: E402
 
 TS = "2026-09-14T10:00:00.000Z"
 TS_EPOCH = 1789380000.0
 
 
-def _assistant(name, tool_input, tool_id, ts=TS):
+def _assistant(name, tool_input, tool_id, ts=TS, **extra):
     return {
         "type": "assistant",
         "timestamp": ts,
         "sessionId": "sess-1",
         "cwd": "/tmp/proj",
+        "entrypoint": "claude-desktop",
         "message": {"content": [{"type": "tool_use", "id": tool_id, "name": name, "input": tool_input}]},
+        **extra,
     }
 
 
@@ -120,10 +122,33 @@ def test_rules_version_change_rescans_everything(tmp_path):
     assert ingest(conn, [path]) == 3
     assert conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()[0] == RULES_VERSION
     conn.execute("UPDATE meta SET value = 'older' WHERE key = 'rules_version'")
-    conn.execute("DELETE FROM actions WHERE source_ref = 'toolu_bash'")
+    conn.execute("UPDATE actions SET agent = 'stale-name'")
     conn.commit()
-    assert ingest(conn, [path]) == 1                                # re-read from offset 0, found the missing one
+    assert ingest(conn, [path]) == 3                                # log rows dropped and re-extracted
+    assert conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0] == 3
+    assert conn.execute("SELECT DISTINCT agent FROM actions").fetchall() == [("claude-code (claude-desktop)",)]
     assert conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()[0] == RULES_VERSION
+    conn.close()
+
+
+def test_reconcile_fills_missing_user(tmp_path):
+    conn = connect(tmp_path / "t.db")
+    _insert_raw(conn, "r2", "rm x")
+    conn.commit()
+    assert conn.execute("SELECT user FROM actions").fetchone()[0] is None
+    reconcile(conn)
+    assert conn.execute("SELECT user FROM actions").fetchone()[0] == current_user()
+    conn.close()
+
+
+def test_migration_adds_user_column_to_old_db(tmp_path):
+    import sqlite3
+    old = sqlite3.connect(tmp_path / "old.db")
+    old.execute("CREATE TABLE actions (id INTEGER PRIMARY KEY, timestamp REAL, agent TEXT, source TEXT, "
+                "action_type TEXT, attribution TEXT)")
+    old.commit(); old.close()
+    conn = connect(tmp_path / "old.db")
+    assert "user" in {r[1] for r in conn.execute("PRAGMA table_info(actions)")}
     conn.close()
 
 
@@ -151,6 +176,21 @@ def test_parse_file_extracts_only_side_effects(tmp_path):
     assert all(a["attribution"] == "agent" and a["source"] == "log" for a in actions)
     assert actions[0]["target"] == "/tmp/out.txt"
     assert actions[1]["target"] == "git commit -m 'hi'"
+    assert all(a["agent"] == "claude-code (claude-desktop)" for a in actions)
+    assert all(a["user"] == current_user() for a in actions)
+
+
+def test_agent_name_variants(tmp_path):
+    path = tmp_path / "s.jsonl"
+    _write_transcript(path, [
+        _assistant("Write", {"file_path": "/a"}, "t1", entrypoint=None),
+        _assistant("Write", {"file_path": "/b"}, "t2", entrypoint="cli"),
+        _assistant("Write", {"file_path": "/c"}, "t3", isSidechain=True),
+    ])
+    names = [a["agent"] for a in parse_file(path)]
+    assert names == ["claude-code", "claude-code (cli)", "claude-code (claude-desktop) › subagent"]
+    raw = json.loads(list(parse_file(path))[2]["raw_json"])
+    assert raw["sidechain"] is True and raw["entrypoint"] == "claude-desktop"
 
 
 def test_raw_json_caps_long_strings(tmp_path):

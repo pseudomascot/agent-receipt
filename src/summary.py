@@ -26,6 +26,10 @@ def build_summary(conn: sqlite3.Connection, day: date) -> str:
         lines.append(f"{s['total']} actions: {a['agent']} agent, {a['human']} human, {a['unknown']} unknown.")
         lines.append("By type: " + ", ".join(f"{n} {t}" for t, n in s["by_type"]) + ".")
         lines.append("Projects: " + ", ".join(f"{p} ({n})" for p, n in s["by_project"]) + ".")
+        if len(s["by_agent"]) > 1:
+            lines.append("Agents: " + ", ".join(f"{a} ({n})" for a, n in s["by_agent"]) + ".")
+        if len(s["by_user"]) > 1:
+            lines.append("Users: " + ", ".join(f"{u} ({n})" for u, n in s["by_user"]) + ".")
         if s["money"]:
             lines.append("Money: " + ", ".join(f"{amt:.2f} {cur}" for cur, amt in s["money"].items()) + ".")
         else:

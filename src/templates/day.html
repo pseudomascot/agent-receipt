@@ -35,23 +35,49 @@
 {% endif %}
 
 <h2>Actions</h2>
+{% set keep_agent = ('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '' %}
+{% set keep_user = ('&user=' ~ (user_filter|urlencode)) if user_filter else '' %}
+{% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
 <div class="filters">
-  <a href="/day/{{ day }}" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
+  <span class="note">Type:</span>
+  <a href="/day/{{ day }}?{{ keep_agent }}{{ keep_user }}" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
   {% for type, n in by_type %}
-  <a href="/day/{{ day }}?type={{ type }}" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
+  <a href="/day/{{ day }}?type={{ type }}{{ keep_agent }}{{ keep_user }}" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
   {% endfor %}
   {% if by_project|length > 1 %}<span class="note" style="margin-left:12px">Projects: {% for p, n in by_project %}{{ p }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 </div>
+{% if by_agent|length > 1 %}
+<div class="filters">
+  <span class="note">Agent:</span>
+  <a href="/day/{{ day }}?{{ keep_type }}{{ keep_user }}" class="chip{% if not agent_filter %} on{% endif %}">all</a>
+  {% for agent, n in by_agent %}
+  <a href="/day/{{ day }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% if by_user|length > 1 %}
+<div class="filters">
+  <span class="note">User:</span>
+  <a href="/day/{{ day }}?{{ keep_type }}{{ keep_agent }}" class="chip{% if not user_filter %} on{% endif %}">all</a>
+  {% for user, n in by_user %}
+  <a href="/day/{{ day }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% if by_agent|length == 1 and by_user|length == 1 %}
+<div class="note" style="margin-bottom:6px">Agent: {{ by_agent[0][0] }} &middot; User: {{ by_user[0][0] }}. Filters for agent and user appear once there is more than one.</div>
+{% endif %}
 
 {% if project_groups %}
 {% for project, rows in project_groups %}
 <h3>{{ project }} <span class="muted">— {{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
 <table>
-  <tr><th style="width:80px">Time</th><th style="width:90px">Type</th><th>Target</th><th style="width:100px">Reversible</th><th style="width:260px">Attribution</th></tr>
+  <tr><th style="width:80px">Time</th><th style="width:90px">Type</th>{% if by_agent|length > 1 or by_user|length > 1 %}<th style="width:160px">Agent / user</th>{% endif %}<th>Target</th><th style="width:100px">Reversible</th><th style="width:260px">Attribution</th></tr>
   {% for a in rows %}
   <tr>
     <td>{{ a.time }}</td>
     <td>{{ a.action_type }}</td>
+    {% if by_agent|length > 1 or by_user|length > 1 %}<td class="note">{{ a.agent }}<br>{{ a.user }}</td>{% endif %}
     <td class="mono">
       {% if a.is_long %}
       <details><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>

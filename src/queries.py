@@ -79,11 +79,12 @@ def list_days(conn: sqlite3.Connection):
     return list(days.values())
 
 
-def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None = None):
+def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None = None,
+                  agent_filter: str | None = None, user_filter: str | None = None):
     start, end = day_bounds(day)
     rows = conn.execute(
         "SELECT id, timestamp, agent, action_type, target, amount, currency, artifact_link, "
-        "reversible, attribution, confidence_note, raw_json "
+        "reversible, attribution, confidence_note, raw_json, user "
         "FROM actions WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp",
         (start, end),
     ).fetchall()
@@ -96,6 +97,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
             "id": r[0],
             "time": datetime.fromtimestamp(r[1]).strftime("%H:%M:%S"),
             "agent": r[2],
+            "user": r[12] or "(unknown user)",
             "action_type": r[3],
             "target": target,
             "short_target": shown.splitlines()[0][:SHORT_TARGET] if shown else "",
@@ -115,6 +117,8 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
     by_type = {}
     by_attribution = {"agent": 0, "human": 0, "unknown": 0}
     by_project = {}
+    by_agent = {}
+    by_user = {}
     money = {}
     file_targets = {}
     uncovered = 0
@@ -122,6 +126,8 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         by_type[a["action_type"]] = by_type.get(a["action_type"], 0) + 1
         by_attribution[a["attribution"]] += 1
         by_project[a["project"]] = by_project.get(a["project"], 0) + 1
+        by_agent[a["agent"]] = by_agent.get(a["agent"], 0) + 1
+        by_user[a["user"]] = by_user.get(a["user"], 0) + 1
         if a["amount"] is not None:
             cur = a["currency"] or "?"
             money[cur] = money.get(cur, 0) + a["amount"]
@@ -130,7 +136,10 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         if "monitor was not running" in a["note"]:
             uncovered += 1
 
-    shown = [a for a in actions if not type_filter or a["action_type"] == type_filter]
+    shown = [a for a in actions
+             if (not type_filter or a["action_type"] == type_filter)
+             and (not agent_filter or a["agent"] == agent_filter)
+             and (not user_filter or a["user"] == user_filter)]
     groups = {}
     for a in shown:
         if a["attribution"] != "unknown":
@@ -153,6 +162,10 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
     return {
         "day": day.isoformat(),
         "type_filter": type_filter,
+        "agent_filter": agent_filter,
+        "user_filter": user_filter,
+        "by_agent": sorted(by_agent.items(), key=lambda kv: -kv[1]),
+        "by_user": sorted(by_user.items(), key=lambda kv: -kv[1]),
         "project_groups": project_groups,
         "shown_count": len(shown),
         "unknown": [a for a in shown if a["attribution"] == "unknown"],

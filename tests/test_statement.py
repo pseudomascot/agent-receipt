@@ -18,11 +18,11 @@ def _raw(cwd):
     return json.dumps({"tool": "x", "input": {}, "cwd": cwd, "session_id": "s1"})
 
 
-def _seed(db_path):
+def _seed(db_path, second_agent=False):
     conn = connect(db_path)
     conn.executemany(
-        "INSERT INTO actions (timestamp, agent, source, action_type, target, attribution, confidence_note, raw_json) "
-        "VALUES (?, 'claude-code', 'log', ?, ?, ?, ?, ?)",
+        "INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+        "VALUES (?, 'claude-code', 'marc', 'log', ?, ?, ?, ?, ?)",
         [
             (T, "file_write", "/Users/marc/proj-a/src/<script>alert(1)</script>.txt", "agent", "agent log", _raw("/Users/marc/proj-a")),
             (T + 60, "execute", LONG_CMD, "agent", "x | agent log wins; physical input also present", _raw("/Users/marc/proj-a")),
@@ -32,9 +32,35 @@ def _seed(db_path):
             (T - 86400, "post", "yesterday.html", "human", "physical input present", _raw(None)),
         ],
     )
+    if second_agent:
+        conn.execute(
+            "INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+            "VALUES (?, 'other-bot', 'sam', 'log', 'execute', 'deploy.sh', 'agent', 'agent log', ?)",
+            (T + 200, _raw("/Users/marc/proj-b")),
+        )
     conn.execute("INSERT INTO coverage (source, started_at, ended_at) VALUES ('input', ?, ?)", (T - 600, T + 600))
     conn.commit()
     conn.close()
+
+
+def test_agent_and_user_filters_appear_only_with_variety(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    assert "Agent: claude-code &middot; User: marc" in html
+    assert "?agent=" not in html
+
+    db2 = tmp_path / "t2.db"
+    _seed(db2, second_agent=True)
+    client = create_app(db2).test_client()
+    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert "?agent=other-bot" in html and "?user=sam" in html
+    assert "deploy.sh" in html and "git commit -m hi" in html
+
+    html = client.get(f"/day/{DAY}?agent=other-bot").get_data(as_text=True)
+    assert "deploy.sh" in html and "git commit -m hi" not in html
+    html = client.get(f"/day/{DAY}?user=marc&type=execute").get_data(as_text=True)
+    assert "git commit -m hi" in html and "deploy.sh" not in html and "src/&lt;script&gt;" not in html
 
 
 def test_display_target():
