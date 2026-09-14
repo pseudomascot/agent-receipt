@@ -1,13 +1,15 @@
 # Progress
 
 ## Current state
-v1 step 1 done (repo, license, .gitignore, docs). v1 step 2 code done: src/input_monitor.py + tests/test_input_monitor.py written and passing (4/4), using a `.venv` with pynput + pytest. The code has NOT been run live yet — only tested against the DB logic directly, so no Accessibility permission has been requested and no real input has been captured.
+v1 step 2 done and verified live: src/input_monitor.py logs key/click timestamps to SQLite (id, timestamp, kind only). 4/4 automated tests pass. Live-tested on Marc's machine: 41 real events captured (37 key, 4 click) with no crash after fixing a thread-safety bug (pynput fires callbacks on its own threads; sqlite3 connection needed `check_same_thread=False` + a lock). Confirmed clean start/stop via SIGINT.
+
+Permission note: the process tree for this Claude Code session runs through `/Applications/Claude.app` (not Terminal.app) — that's the app that needed Accessibility access, and it's what Marc granted. macOS Accessibility listed two separate entries (`Claude.app` and an embedded `claude.app` helper for claude-code); only the top-level `Claude.app` needed to be on.
 
 ## Next step
-Decide with Marc whether to actually run `src/input_monitor.py` live (this triggers a real macOS Accessibility permission prompt and starts recording real key/click timestamps to agent_receipt.db). If yes: run it, verify a few real events land in the db, then stop it. After that: step 3, find where Claude Code/Desktop write their own logs (docs/SOURCES.md).
+v1 step 3: find where Claude Code and Claude Desktop write their own logs, document in docs/SOURCES.md. No preference given yet on which agents to prioritize (Claude Code / Desktop / Chrome) — default to checking for all three.
 
 ## Blockers
-None currently — Marc's earlier concern (not wanting live logging while no agent is running) was addressed by keeping code-writing and test-running separate from actually starting the live listener. Still need his explicit go before running it live.
+None.
 
 ## Session log
 <!-- Newest first. One entry per session: date, what got done, what's next. -->
