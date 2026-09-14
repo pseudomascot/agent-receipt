@@ -3,11 +3,9 @@
 cd "$(dirname "$0")" || exit 1
 
 if [ ! -x ./.venv/bin/python ]; then
-  echo "The Python environment (.venv) is missing."
-  echo "In Terminal, from this folder, run:"
-  echo "  python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt"
+  echo "Agent Receipt isn't set up yet. Double-click \"Setup.command\" first (one time), then this again."
   echo
-  read -r "?Press Enter to close."
+  printf 'Press Enter to close.'; read -r _
   exit 1
 fi
 

@@ -11,29 +11,43 @@ able to read every line and confirm it records only *that* a key or click
 happened, never which one — see `src/input_monitor.py` and the schema in
 `src/store.py`.
 
-## Running it
-1. Double-click **`Agent Receipt.command`** in this folder. A Terminal window
-   opens and stays open; the statement page opens in your browser at
-   http://127.0.0.1:8765/.
-2. The first time, macOS may say the input monitor is "not trusted". Open
-   System Settings → Privacy & Security → Accessibility, turn on **Terminal**,
-   then close the window and double-click the `.command` again.
-3. Close the Terminal window to stop everything.
+## Try it (macOS, five minutes)
+1. **Get the folder.** On GitHub click **Code → Download ZIP**, unzip, and put
+   the `agent-receipt` folder somewhere you'll keep it (Documents is fine).
+   Or `git clone https://github.com/pseudomascot/agent-receipt`.
+2. **Double-click `Setup.command`.** It checks for Python 3.11+, creates a
+   private environment inside the folder, installs the two dependencies, and
+   prints a report of what it found: which agents have logs on this Mac, and
+   whether the input monitor has permission. Nothing runs yet.
+   - If macOS refuses to open a `.command` file from the internet:
+     right-click it → Open → Open.
+   - If Python is missing, the report says so; install it from python.org.
+3. **Grant the one permission.** System Settings → Privacy & Security →
+   Accessibility → turn on **Terminal**. This lets the input monitor notice
+   *that* you pressed a key or clicked — never which key, never where.
+4. **Double-click `Agent Receipt.command`.** A Terminal window stays open and
+   your statement opens at http://127.0.0.1:8765/. Close the window to stop.
 
-While it runs it re-reads the agent logs every 5 minutes, re-attributes every
-action, and rewrites today's summary in `summaries/`.
+The first run reads everything your agents have ever logged (tens of
+thousands of lines take seconds), then refreshes every five minutes.
 
-**Needs review**: an irreversible action by a scheduled task (or with nobody
-at the keyboard), a burst of irreversible actions, an unexplained action, or
-a payment over a threshold raises a macOS notification within five minutes
-and waits on the Needs review page until you mark it seen. All local.
+## What you'll see
+- **Front page:** days with activity, and a "This machine" table — which
+  agents were found, which connectors are configured, whether the monitor is
+  running.
+- **A day:** every side-effect action — file written, command run, message
+  sent, purchase — with who did it (`agent` / `human` / `unknown`), whether it
+  can be undone, and why the receipt believes each of those.
+- **Needs review:** an irreversible action by a scheduled task or with nobody
+  at the keyboard, a burst of irreversible actions, an unexplained action, or
+  a payment over a threshold; also a macOS notification within five minutes.
+- **Download CSV** (opens in Excel or Google Sheets; the footer carries a
+  checksum and the command to verify the rows were not altered) and **Print**
+  (a paper statement or PDF).
+- **Coverage**, on every page: what is and isn't being watched. A receipt with
+  silent gaps is worse than none.
 
-On the page: one day, the last 7 or 30 days, or all time; filter by type,
-agent, or user; **Download CSV** for the current view (opens in Excel or
-Google Sheets; the footer carries a SHA-256 and the command to verify the rows
-were not altered); **Print** for a paper statement or a PDF.
-
-### What it records
+## What it records
 - `input_events`: that a key or click happened, and when. Never which key,
   never where. Only while the `.command` window is open.
 - `actions`: every side-effect tool call found in the agents' own transcripts
@@ -49,22 +63,16 @@ were not altered); **Print** for a paper statement or a PDF.
   logs, re-checked every few hours, so the statement can say the logs were
   not altered after the receipt read them.
 
-### Email and card charges (optional)
-Give the agent its own mailbox and put its IMAP login in a git-ignored
-`.env` (`cp .env.example .env`; steps in `docs/EMAIL.md`). Sent mail becomes
-`send_email` rows and card-issuer alert emails become `purchase` rows; the
-correlator then says agent, human, or unknown for each from the evidence.
+## Optional connectors
+- **Email and card alerts:** give the agent its own mailbox and put its IMAP
+  login in the private `.env` (`docs/EMAIL.md`). Sent mail becomes
+  `send_email` rows; card-issuer alert emails become `purchase` rows.
+- **Stripe:** a key in `.env` (`docs/STRIPE.md`). Charges the agent collects,
+  and purchases on its own Issuing card where Issuing is activated.
 
-### Card spend via Stripe (optional)
-Put a Stripe key in `.env` (`RECEIPT_STRIPE_TEST_KEY=sk_test_…` for the
-sandbox; steps in `docs/STRIPE.md`). Purchases on the agent's own Issuing
-card and charges it collects become rows with amounts, at Stripe's own event
-times. `examples/simulate_card_purchase.py` exercises it with fake money.
-
-### What it does not see
+## What it does not see
 Claude Desktop chat (outside the Code tab), Google Antigravity, and — until
-the mailbox is configured — email, cards, and wallets. The page says so on
-every screen.
+configured — email, cards, and wallets. The page says so on every screen.
 
 ## For developers
 ```
@@ -73,14 +81,16 @@ python3 -m venv .venv
 ./.venv/bin/pytest
 ```
 Pieces, each runnable on its own from `src/`: `input_monitor.py`,
-`log_parser.py`, `correlator.py`, `summary.py [YYYY-MM-DD]`, `statement.py`.
+`log_parser.py`, `correlator.py`, `summary.py [YYYY-MM-DD]`, `statement.py`,
+`verify.py`, `doctor.py`, `email_connector.py`, `stripe_connector.py`.
 `run.py` is what the `.command` starts.
 
 ## Project files
 - `CLAUDE.md` — the project brief; Claude Code reads it every session.
 - `PROGRESS.md` — where the project is; updated each session.
 - `docs/DESIGN.md` — the reasoning behind the design.
-- `docs/SOURCES.md` — where the agent logs live on this machine.
+- `docs/SOURCES.md` — where each agent's logs live and how they are read.
+- `docs/RECEIPT_LINE.md` — the open format any agent can write.
 
 ## Every later session with Claude Code
 From this folder, run `claude` and paste:

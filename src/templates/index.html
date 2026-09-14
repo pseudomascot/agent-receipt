@@ -19,6 +19,19 @@
   {% endfor %}
 </table>
 {% else %}
-<div class="empty">No actions recorded yet. Run the log parser to import Claude Code activity.</div>
+<div class="empty">No actions recorded yet. Once "Agent Receipt.command" is running, anything your agents have done shows up here within five minutes.</div>
 {% endif %}
+
+<h2>This machine</h2>
+<table class="compact" style="min-width:520px">
+  {% for src in machine.sources %}
+  <tr>
+    <td>{{ src.label }}</td>
+    <td>{% if src.files %}<span class="pill covered">{{ src.files }} transcript{{ '' if src.files == 1 else 's' }}</span> <span class="note">{{ src.mb }} MB</span>{% elif src.name == 'inbox' %}<span class="note">empty</span>{% else %}<span class="note">not found</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  <tr><td>Agent mailbox (email + card alerts)</td><td>{% if machine.email %}<span class="pill covered">configured</span>{% else %}<span class="note">not configured — docs/EMAIL.md</span>{% endif %}</td></tr>
+  <tr><td>Stripe</td><td>{% if machine.stripe %}<span class="pill covered">configured</span>{% else %}<span class="note">not configured — docs/STRIPE.md</span>{% endif %}</td></tr>
+  <tr><td>Input monitor</td><td>{% if machine.db.monitor_running %}<span class="pill covered">running</span>{% else %}<span class="pill not">not running</span> <span class="note">start "Agent Receipt.command"; needs Accessibility permission for Terminal</span>{% endif %}</td></tr>
+</table>
 {% endblock %}

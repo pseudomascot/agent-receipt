@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Flask, Response, abort, redirect, render_template, request
 
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
+from doctor import status as machine_status
 from export import export_csv
 from queries import ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, statement
 from store import DB_PATH, connect
@@ -75,7 +76,8 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return render_template("index.html", days=days, coverage_notes=coverage_notes(),
-                               integrity=integrity, today=date.today().isoformat())
+                               integrity=integrity, today=date.today().isoformat(),
+                               machine=machine_status(db_path))
 
     @app.route("/day/<day_str>")
     def day_page(day_str):
