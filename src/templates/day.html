@@ -8,6 +8,10 @@
   <a href="/">All days</a>
 </nav>
 
+<h2>Daily summary</h2>
+<pre class="summary">{{ summary }}</pre>
+<div class="note">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — run <code>src/summary.py {{ day }}</code>.{% endif %}</div>
+
 <h2>Totals</h2>
 <div class="totals">
   <div><b>{{ total }}</b>actions</div>
@@ -22,7 +26,8 @@
 {% if monitor_intervals %}
 <div class="note">Running for about {{ monitor_minutes }} minute(s):
   {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}.
-  Outside these windows, "no physical input" cannot be distinguished from "not looking".</div>
+  Outside these windows, "no physical input" cannot be distinguished from "not looking".
+  {{ uncovered }} of {{ total }} actions happened while it was off.</div>
 {% else %}
 <div class="note">Not running at any point this day. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
 {% endif %}

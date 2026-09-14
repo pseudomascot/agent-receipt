@@ -1,7 +1,9 @@
 # Progress
 
 ## Current state
-v1 steps 1-6 done. Step 6 (statement page, `src/statement.py` + `src/templates/`) is a Flask app bound to 127.0.0.1:8765. `/` lists days with agent/human/unknown counts; `/day/YYYY-MM-DD` shows totals by type and attribution, the input-monitor intervals for that day (with minutes), the actions table, a separate Unknown section, and a "what this receipt covers" table on every page (Claude Code: covered; physical input: partial; Desktop chat / email / card / wallet: not covered). Verified in the browser on real data. Run with `./.venv/bin/python src/statement.py`.
+v1 steps 1-7 done. Step 7 (daily summary, `src/summary.py`) writes a short plain-text statement per day to `summaries/YYYY-MM-DD.txt` (git-ignored) and the same text is shown live at the top of that day's page. Deterministic, from the database only — no AI, no network. Shared read queries moved to `src/queries.py`. Run with `./.venv/bin/python src/summary.py [YYYY-MM-DD]` (default: today).
+
+Earlier: step 6 done. Step 6 (statement page, `src/statement.py` + `src/templates/`) is a Flask app bound to 127.0.0.1:8765. `/` lists days with agent/human/unknown counts; `/day/YYYY-MM-DD` shows totals by type and attribution, the input-monitor intervals for that day (with minutes), the actions table, a separate Unknown section, and a "what this receipt covers" table on every page (Claude Code: covered; physical input: partial; Desktop chat / email / card / wallet: not covered). Verified in the browser on real data. Run with `./.venv/bin/python src/statement.py`.
 
 Earlier: step 5 done. Step 5 (correlator, `src/correlator.py`) applies the CLAUDE.md attribution rules to every action with a 30s window; safe to re-run. Added a `coverage` table (start/end per collector, heartbeated by the input monitor every 5s) so the receipt can distinguish "no physical input" from "monitor wasn't running" — the latter is what 1,713 of 1,716 current actions say, which is the truth: the monitor has only run for ~2 minutes so far. One coverage row was backfilled by hand for that test run (10:35:32–10:37:01 on 2026-09-14).
 
@@ -12,7 +14,7 @@ Earlier steps: steps 1-3 done. Step 2 (input monitor) verified live: 41 real eve
 Permission note: the process tree for this Claude Code session runs through `/Applications/Claude.app` (not Terminal.app) — that's the app that needed Accessibility access for the input monitor, and it's what Marc granted.
 
 ## Next step
-v1 step 7: daily summary — a short plain-text summary per day written to a file (e.g. `summaries/YYYY-MM-DD.txt`) and shown at the top of that day's page. Then step 8: run everything for a week and review with Marc. For the week-long run the three pieces (input monitor, parser, correlator) need a single "start" command and something that re-runs parser+correlator periodically — decide the shape with Marc (launchd vs. a simple loop vs. the menu-bar app from CLAUDE.md).
+v1 step 8: run it for a week, then review with Marc. Before the week can start, the pieces need to run without Marc babysitting a terminal: one command that starts the input monitor and the statement page, and re-runs parser + correlator + summary on a schedule (every few minutes is plenty). Decide the shape with Marc: a simple `run.py` loop launched from a `.command` file (least new machinery), a launchd agent (survives reboots), or the `rumps` menu-bar app from CLAUDE.md (nicest, one more dependency). Also: the input monitor only works when the launching app has Accessibility permission — a Terminal/.command launch will need Terminal added, unlike this session's Claude.app.
 
 ## Blockers
 None. Note for later: since Desktop-chat has no usable local log, v1's coverage is effectively "Claude Code sessions only" — the statement page should say that plainly rather than imply full coverage.
