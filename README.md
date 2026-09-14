@@ -1,33 +1,51 @@
-# Agent Receipt — how to start
+# Agent Receipt
 
-## What's in this folder
-- `CLAUDE.md` — the project brief. Claude Code reads this automatically at the start of every session.
-- `PROGRESS.md` — where the project is. Claude Code updates it each session.
-- `docs/DESIGN.md` — the reasoning behind the design, so future sessions don't re-argue it.
-- `docs/SOURCES.md` — filled in during session 1: where the agent logs live on your machine.
-- `LICENSE` — MIT. Put your name in it.
+A local app that produces a daily statement of every side-effect action an AI
+agent took on this machine. A bank statement for what your AI did. Local only;
+nothing leaves the machine. MIT licensed.
 
-## Starting session 1
-1. Put this folder inside `Claude Business Ideas` on your Desktop.
-2. Open Terminal (Mac) or PowerShell (Windows).
-3. Go into the folder:
-   - Mac: `cd ~/Desktop/"Claude Business Ideas"/agent-receipt`
-   - Windows: `cd "$HOME\Desktop\Claude Business Ideas\agent-receipt"`
-4. Run `claude`.
-5. Paste the first prompt below.
+## Running it
+1. Double-click **`Agent Receipt.command`** in this folder. A Terminal window
+   opens and stays open; the statement page opens in your browser at
+   http://127.0.0.1:8765/.
+2. The first time, macOS may say the input monitor is "not trusted". Open
+   System Settings → Privacy & Security → Accessibility, turn on **Terminal**,
+   then close the window and double-click the `.command` again.
+3. Close the Terminal window to stop everything.
 
-## First prompt (paste this)
+While it runs it re-reads the agent logs every 5 minutes, re-attributes every
+action, and rewrites today's summary in `summaries/`.
+
+### What it records
+- `input_events`: that a key or click happened, and when. Never which key,
+  never where. Only while the `.command` window is open.
+- `actions`: every side-effect tool call found in Claude Code's own
+  transcripts (file writes, shell commands, browser actions, posts).
+- `coverage`: when the input monitor was actually running, so the statement
+  can say "not looking" instead of "nothing happened".
+
+### What it does not see
+Claude Desktop chat (outside the Code tab), email, cards, wallets. The page
+says so on every screen.
+
+## For developers
 ```
-Read CLAUDE.md and docs/DESIGN.md. Then ask me the open questions one at a time.
-After that, walk me through v1 step 1 only. I don't code, so explain each
-command before you run it and wait for me before moving on.
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements-dev.txt
+./.venv/bin/pytest
 ```
+Pieces, each runnable on its own from `src/`: `input_monitor.py`,
+`log_parser.py`, `correlator.py`, `summary.py [YYYY-MM-DD]`, `statement.py`.
+`run.py` is what the `.command` starts.
 
-## Every later session
-Go into the folder, run `claude`, and paste:
+## Project files
+- `CLAUDE.md` — the project brief; Claude Code reads it every session.
+- `PROGRESS.md` — where the project is; updated each session.
+- `docs/DESIGN.md` — the reasoning behind the design.
+- `docs/SOURCES.md` — where the agent logs live on this machine.
+
+## Every later session with Claude Code
+From this folder, run `claude` and paste:
 ```
 Read CLAUDE.md and PROGRESS.md. Tell me where we are and what today's step is, then wait for me.
 ```
-
-## What to expect from session 1
-About an hour. By the end: the repo exists, the license and .gitignore are in place, PROGRESS.md has its first entry, and you know which OS-specific path the build is taking. The input monitor (step 2) may or may not start; that's fine.

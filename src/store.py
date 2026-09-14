@@ -49,6 +49,9 @@ def connect(db_path: Path = DB_PATH) -> sqlite3.Connection:
     # check_same_thread=False because the input monitor writes from pynput's
     # listener threads. Callers that share a connection across threads must
     # serialize writes themselves.
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    # timeout + WAL: the monitor, the refresh loop, and the page all touch this
+    # file at once from separate processes.
+    conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     return conn
