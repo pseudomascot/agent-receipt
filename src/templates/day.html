@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — {{ day }}{% endblock %}
+{% block body %}
+<nav>
+  <a href="/day/{{ prev_day }}">&larr; {{ prev_day }}</a> &nbsp;|&nbsp;
+  <b>{{ day }}</b> &nbsp;|&nbsp;
+  <a href="/day/{{ next_day }}">{{ next_day }} &rarr;</a> &nbsp;|&nbsp;
+  <a href="/">All days</a>
+</nav>
+
+<h2>Totals</h2>
+<div class="totals">
+  <div><b>{{ total }}</b>actions</div>
+  <div><b>{{ by_attribution.agent }}</b><span class="pill agent">agent</span></div>
+  <div><b>{{ by_attribution.human }}</b><span class="pill human">human</span></div>
+  <div><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unknown</span></div>
+  {% for type, n in by_type %}<div><b>{{ n }}</b>{{ type }}</div>{% endfor %}
+  {% for cur, amt in money.items() %}<div><b>{{ '%.2f'|format(amt) }}</b>{{ cur }} spent</div>{% endfor %}
+</div>
+
+<h2>Input monitor on this day</h2>
+{% if monitor_intervals %}
+<div class="note">Running for about {{ monitor_minutes }} minute(s):
+  {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  Outside these windows, "no physical input" cannot be distinguished from "not looking".</div>
+{% else %}
+<div class="note">Not running at any point this day. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
+{% endif %}
+
+<h2>Actions</h2>
+{% if actions %}
+<table>
+  <tr><th>Time</th><th>Agent</th><th>Type</th><th>Target</th><th>Reversible</th><th>Attribution</th></tr>
+  {% for a in actions %}
+  <tr>
+    <td>{{ a.time }}</td>
+    <td>{{ a.agent }}</td>
+    <td>{{ a.action_type }}</td>
+    <td class="mono">{{ a.target }}{% if a.artifact_link %}<div class="note">{{ a.artifact_link }}</div>{% endif %}</td>
+    <td>{{ a.reversible }}</td>
+    <td><span class="pill {{ a.attribution }}">{{ a.attribution }}</span><div class="note">{{ a.note }}</div></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No attributed actions on this day.</div>
+{% endif %}
+
+<h2>Unknown</h2>
+{% if unknown %}
+<div class="note">Actions where neither an agent log nor physical input could say who did it.</div>
+<table>
+  <tr><th>Time</th><th>Type</th><th>Target</th><th>Why unknown</th></tr>
+  {% for a in unknown %}
+  <tr>
+    <td>{{ a.time }}</td>
+    <td>{{ a.action_type }}</td>
+    <td class="mono">{{ a.target }}</td>
+    <td class="note">{{ a.note }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">None.</div>
+{% endif %}
+{% endblock %}

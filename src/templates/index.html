@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block body %}
+<nav><a href="/day/{{ today }}">Today</a></nav>
+
+<h2>Days with activity</h2>
+{% if days %}
+<table>
+  <tr><th>Day</th><th>Actions</th><th>Agent</th><th>Human</th><th>Unknown</th></tr>
+  {% for d in days %}
+  <tr>
+    <td><a href="/day/{{ d.day }}">{{ d.day }}</a></td>
+    <td>{{ d.total }}</td>
+    <td>{{ d.agent }}</td>
+    <td>{{ d.human }}</td>
+    <td>{% if d.unknown %}<span class="pill unknown">{{ d.unknown }}</span>{% else %}0{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No actions recorded yet. Run the log parser to import Claude Code activity.</div>
+{% endif %}
+{% endblock %}
