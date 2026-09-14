@@ -1,15 +1,15 @@
 # Progress
 
 ## Current state
-v1 step 2 done and verified live: src/input_monitor.py logs key/click timestamps to SQLite (id, timestamp, kind only). 4/4 automated tests pass. Live-tested on Marc's machine: 41 real events captured (37 key, 4 click) with no crash after fixing a thread-safety bug (pynput fires callbacks on its own threads; sqlite3 connection needed `check_same_thread=False` + a lock). Confirmed clean start/stop via SIGINT.
+v1 steps 1-3 done. Step 2 (input monitor) verified live: 41 real events captured, thread-safety bug found and fixed. Step 3 (docs/SOURCES.md) done: Claude Code writes clean per-session JSONL transcripts to `~/.claude/projects/<project-path>/<session-uuid>.jsonl` with tool_use blocks — this is the source the log parser (step 4) will read. Claude Desktop's regular chat (non-Code tab) does NOT keep a usable local log — conversation/action data appears to sync to Anthropic's servers instead; only Electron operational logs are local. MCP tool calls appear inline in the Claude Code JSONL (no separate MCP log in use on this machine).
 
-Permission note: the process tree for this Claude Code session runs through `/Applications/Claude.app` (not Terminal.app) — that's the app that needed Accessibility access, and it's what Marc granted. macOS Accessibility listed two separate entries (`Claude.app` and an embedded `claude.app` helper for claude-code); only the top-level `Claude.app` needed to be on.
+Permission note: the process tree for this Claude Code session runs through `/Applications/Claude.app` (not Terminal.app) — that's the app that needed Accessibility access for the input monitor, and it's what Marc granted.
 
 ## Next step
-v1 step 3: find where Claude Code and Claude Desktop write their own logs, document in docs/SOURCES.md. No preference given yet on which agents to prioritize (Claude Code / Desktop / Chrome) — default to checking for all three.
+v1 step 4: the log parser — extract Write/Edit/NotebookEdit/Bash/mcp__* tool_use entries (with timestamps) from the Claude Code JSONL files into the `actions` table, per the extraction rules now written in docs/SOURCES.md.
 
 ## Blockers
-None.
+None. Note for later: since Desktop-chat has no usable local log, v1's coverage is effectively "Claude Code sessions only" — the statement page should say that plainly rather than imply full coverage.
 
 ## Session log
 <!-- Newest first. One entry per session: date, what got done, what's next. -->
