@@ -12,6 +12,7 @@ import webbrowser
 from datetime import date
 from pathlib import Path
 
+from alerts import evaluate, notify, notify_new
 from correlator import correlate
 from log_parser import SOURCES, ingest_all, reconcile
 from statement import HOST, PORT
@@ -24,17 +25,20 @@ REFRESH_SECONDS = 300
 VERIFY_SECONDS = 6 * 3600
 
 
-def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR) -> dict:
-    """Parse new log entries, re-attribute, and rewrite today's summary."""
+def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notifier=notify) -> dict:
+    """Parse new log entries, re-attribute, raise alerts, and rewrite today's summary."""
     conn = connect(db_path)
     try:
         removed, updated = reconcile(conn)
         new = ingest_all(conn, sources)
         counts = correlate(conn)
+        new_alerts = evaluate(conn)
+        notified = notify_new(new_alerts, notifier)
         write_summary(conn, date.today(), summaries_dir)
     finally:
         conn.close()
-    return {"new": new, "removed": removed, "updated": updated, **counts}
+    return {"new": new, "removed": removed, "updated": updated, "alerts": len(new_alerts),
+            "notified": notified, **counts}
 
 
 def _child(script: str) -> subprocess.Popen:
@@ -69,7 +73,7 @@ def main() -> None:
                 print("Statement page stopped unexpectedly.")
             result = refresh()
             stamp = time.strftime("%H:%M:%S")
-            print(f"[{stamp}] refreshed: {result['new']} new action(s); "
+            print(f"[{stamp}] refreshed: {result['new']} new action(s), {result['alerts']} new alert(s); "
                   f"agent {result['agent']}, human {result['human']}, unknown {result['unknown']}")
             if time.time() - last_verify > VERIFY_SECONDS:
                 conn = connect()

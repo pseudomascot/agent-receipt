@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — Needs review{% endblock %}
+{% block body %}
+<nav class="screen-only"><a href="/">All days</a> &nbsp;|&nbsp; <a href="/week">Last 7 days</a> &nbsp;|&nbsp; <a href="/all">All time</a></nav>
+
+<h2>Needs review</h2>
+<div class="note">Receipt lines that matched an alert rule. Marking them seen only clears this list; the actions stay on the statement.</div>
+
+{% if items %}
+<form method="post" action="/alerts/seen">
+<div class="filters" style="margin:10px 0">
+  <button type="submit" class="chip">Mark selected seen</button>
+  <button type="submit" name="all" value="1" class="chip">Mark all {{ items|length }} seen</button>
+</div>
+<table>
+  <tr><th style="width:24px"></th><th style="width:130px">When</th><th style="width:170px">Agent</th><th>What</th><th style="width:220px">Why it's here</th></tr>
+  {% for i in items %}
+  <tr>
+    <td><input type="checkbox" name="id" value="{{ i.id }}"></td>
+    <td><a href="/day/{{ i.day }}">{{ i.time }}</a></td>
+    <td class="note">{{ i.agent }}<br>{{ i.project }}</td>
+    <td class="mono">{{ i.action_type }}: {{ i.target[:300] }}{% if i.target|length > 300 %}&hellip;{% endif %}
+      {% if i.reason %}<div class="note">{{ i.reason }}</div>{% endif %}</td>
+    <td><span class="pill unknown">{{ i.rule }}</span><div class="note">{{ i.rule_text }}</div></td>
+  </tr>
+  {% endfor %}
+</table>
+</form>
+{% else %}
+<div class="empty">Nothing waiting. New alerts appear here within five minutes of the action and also as a macOS notification.</div>
+{% endif %}
+
+<h2>Rules</h2>
+<ul class="note">
+  <li><b>unattended_irreversible</b> — an irreversible action (deleted files, git push, data sent to a server…) by a scheduled task, or while the input monitor saw no keyboard/mouse activity in the prior 30 seconds.</li>
+  <li><b>irreversible_burst</b> — five or more irreversible actions by one agent within an hour.</li>
+  <li><b>money_over_threshold</b> — any payment over 100 (needs a card/wallet source; v2).</li>
+  <li><b>unknown_attribution</b> — an action neither an agent log nor physical input can account for (needs a v2 source).</li>
+</ul>
+{% endblock %}

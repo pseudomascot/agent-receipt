@@ -23,6 +23,11 @@ happened, never which one — see `src/input_monitor.py` and the schema in
 While it runs it re-reads the agent logs every 5 minutes, re-attributes every
 action, and rewrites today's summary in `summaries/`.
 
+**Needs review**: an irreversible action by a scheduled task (or with nobody
+at the keyboard), a burst of irreversible actions, an unexplained action, or
+a payment over a threshold raises a macOS notification within five minutes
+and waits on the Needs review page until you mark it seen. All local.
+
 On the page: one day, the last 7 or 30 days, or all time; filter by type,
 agent, or user; **Download CSV** for the current view (opens in Excel or
 Google Sheets; the footer carries a SHA-256 and the command to verify the rows

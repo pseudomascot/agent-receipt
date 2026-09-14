@@ -62,6 +62,19 @@ def test_classify_skips_reads():
     ]}) is None
 
 
+def test_classify_mcp_types_and_new_skips():
+    assert classify("mcp__gmail__send_email", {"to": "a@b.c", "subject": "s"}) == ("send_email", "a@b.c", None)
+    assert classify("mcp__gcal__create_event", {"title": "Dentist"}) == ("create_event", "Dentist", None)
+    assert classify("mcp__stripe__create_payment", {"amount": 5}) == ("purchase", None, None)
+    assert classify("mcp__dispatch__send_message", {"message": "hi"}) == ("post", "hi", None)
+    assert classify("mcp__computer-use__wait", {"seconds": 2}) is None
+    assert classify("mcp__computer-use__zoom", {}) is None
+    assert classify("mcp__cowork__present_files", {"paths": ["x"]}) is None
+    assert classify("mcp__computer-use__request_access", {}) is None
+    assert classify("mcp__workspace__web_fetch", {"url": "u"}) is None
+    assert classify("mcp__computer-use__write_clipboard", {"text": "t"}) == ("other", "t", None)
+
+
 def test_classify_browser_side_effects():
     assert classify("mcp__Claude_Browser__computer", {"action": "left_click"}) == ("other", "left_click", None)
     batch = {"actions": [

@@ -6,10 +6,11 @@ Local only. Binds to 127.0.0.1 and never to a public interface.
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, Response, abort, render_template, request
+from flask import Flask, Response, abort, redirect, render_template, request
 
+from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from export import export_csv
-from queries import ACTION_TYPES, COVERAGE_NOTES, earliest_day, list_days, statement
+from queries import ACTION_TYPES, COVERAGE_NOTES, day_bounds, earliest_day, list_days, statement
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, summary_text
 from verify import status_line
@@ -40,19 +41,30 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
     def db():
         return connect(db_path)
 
+    @app.context_processor
+    def _needs_review():
+        conn = db()
+        try:
+            return {"needs_review": unseen_count(conn)}
+        finally:
+            conn.close()
+
     def render_statement(start: date, end: date, base_url: str):
         filters = _filters()
         conn = db()
         try:
             data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
             integrity = status_line(conn)
+            alerted = unseen_action_ids(conn, day_bounds(start)[0], day_bounds(end)[1])
+            open_alerts = unseen_count(conn)
         finally:
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
         return render_template(
-            "statement.html", coverage_notes=COVERAGE_NOTES, summary=summary_text(data, integrity),
+            "statement.html", coverage_notes=COVERAGE_NOTES,
+            summary=summary_text(data, integrity, open_alerts),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
-            integrity=integrity, query=request.query_string.decode(), **data)
+            integrity=integrity, alerted=alerted, query=request.query_string.decode(), **data)
 
     @app.route("/")
     def index():
@@ -95,6 +107,31 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return render_statement(start, date.today(), "/all")
+
+    @app.route("/alerts")
+    def alerts_page():
+        conn = db()
+        try:
+            items = unseen(conn)
+            integrity = status_line(conn)
+        finally:
+            conn.close()
+        return render_template("alerts.html", items=items, coverage_notes=COVERAGE_NOTES,
+                               integrity=integrity)
+
+    @app.route("/alerts/seen", methods=["POST"])
+    def alerts_seen():
+        conn = db()
+        try:
+            if request.form.get("all"):
+                mark_seen(conn)
+            else:
+                ids = [int(i) for i in request.form.getlist("id") if i.isdigit()]
+                if ids:
+                    mark_seen(conn, ids)
+        finally:
+            conn.close()
+        return redirect("/alerts")
 
     @app.route("/export.csv")
     def export():

@@ -133,6 +133,38 @@ def test_range_week_month_all_pages(tmp_path):
     assert client.get("/range/bad/2026-09-14").status_code == 404
 
 
+def test_alerts_page_flagging_and_mark_seen(tmp_path):
+    from alerts import evaluate
+    db = tmp_path / "t.db"
+    _seed(db)
+    conn = connect(db)
+    conn.execute("UPDATE actions SET reversible = 0, agent = 'cowork (scheduled task)' WHERE target = 'git commit -m hi'")
+    conn.commit()
+    evaluate(conn)
+    conn.close()
+    client = create_app(db).test_client()
+
+    # Two alerts: the scheduled irreversible commit, and the seeded unknown-attribution row.
+    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert "Needs review: 2</a>" in html
+    assert '<tr class="flagged">' in html and "unattended_irreversible" in html
+    assert "Needs review: 2 open alert(s)." in html                            # summary line
+
+    html = client.get("/alerts").get_data(as_text=True)
+    assert "git commit -m hi" in html and "Mark all 2 seen" in html
+    ids = [part.split('"')[0] for part in html.split('name="id" value="')[1:]]
+    assert len(ids) == 2
+
+    resp = client.post("/alerts/seen", data={"id": ids[0]})                   # newest first: the unknown row
+    assert resp.status_code == 302 and resp.headers["Location"].endswith("/alerts")
+    assert "Needs review: 1</a>" in client.get(f"/day/{DAY}").get_data(as_text=True)
+
+    client.post("/alerts/seen", data={"all": "1"})
+    assert "Nothing waiting" in client.get("/alerts").get_data(as_text=True)
+    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert "Needs review: 0</a>" in html and 'class="flagged"' not in html
+
+
 def test_print_markup_present(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)

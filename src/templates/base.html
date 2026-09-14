@@ -33,6 +33,8 @@
   .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
   .chip { display: inline-block; padding: 3px 10px; border: 1px solid #d4d4cf; border-radius: 999px; background: #fff; color: #333; text-decoration: none; font-size: 12px; }
   .chip.on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  button.chip { cursor: pointer; font: inherit; font-size: 12px; }
+  tr.flagged td { background: #fffbeb; }
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
   details summary::before { content: "▸ "; color: #888; }
@@ -56,7 +58,8 @@
 </style>
 </head>
 <body>
-<h1><a href="/" style="text-decoration:none;color:inherit">Agent Receipt</a></h1>
+<h1><a href="/" style="text-decoration:none;color:inherit">Agent Receipt</a>
+  <a href="/alerts" class="pill {{ 'unknown' if needs_review else 'covered' }} screen-only" style="font-size:12px;vertical-align:middle;text-decoration:none;margin-left:10px">Needs review: {{ needs_review or 0 }}</a></h1>
 <div class="muted">A statement of every side-effect action an AI agent took on this machine. Local only.</div>
 {% block body %}{% endblock %}
 

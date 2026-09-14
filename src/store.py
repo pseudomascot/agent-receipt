@@ -58,6 +58,18 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_path ON transcript_chunks (path, start_offset);
 
+-- Actions that matched an alert rule. seen_at is set when Marc reviews them.
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_id INTEGER NOT NULL REFERENCES actions(id) ON DELETE CASCADE,
+    rule TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    seen_at REAL,
+    UNIQUE (action_id, rule)
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_unseen ON alerts (seen_at);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

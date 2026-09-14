@@ -16,11 +16,12 @@ SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
 
 
 def build_summary(conn: sqlite3.Connection, day: date) -> str:
+    from alerts import unseen_count
     from verify import status_line
-    return summary_text(day_statement(conn, day), status_line(conn))
+    return summary_text(day_statement(conn, day), status_line(conn), unseen_count(conn))
 
 
-def summary_text(s: dict, integrity: str | None = None) -> str:
+def summary_text(s: dict, integrity: str | None = None, needs_review: int | None = None) -> str:
     """Plain-text summary of a statement dict (a day or a range)."""
     a = s["by_attribution"]
     lines = [f"Agent Receipt — {s.get('label', s['day'])}"]
@@ -59,6 +60,9 @@ def summary_text(s: dict, integrity: str | None = None) -> str:
         lines.append(f"Unknown: {len(s['unknown'])} action(s) nobody can be confirmed for — review them.")
     else:
         lines.append("Unknown: none.")
+
+    if needs_review is not None:
+        lines.append(f"Needs review: {needs_review} open alert(s)." if needs_review else "Needs review: none.")
 
     lines.append("Not covered: " + "; ".join(NOT_COVERED) + ".")
     if integrity:

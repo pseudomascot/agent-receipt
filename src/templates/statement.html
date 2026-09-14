@@ -96,9 +96,9 @@
 <table>
   <tr><th style="width:80px">Time</th><th style="width:90px">Type</th>{% if by_agent|length > 1 or by_user|length > 1 %}<th style="width:160px">Agent / user</th>{% endif %}<th>Target</th><th style="width:100px">Reversible</th><th style="width:260px">Attribution</th></tr>
   {% for a in rows %}
-  <tr>
+  <tr{% if a.id in alerted %} class="flagged"{% endif %}>
     <td>{{ a.time }}</td>
-    <td>{{ a.action_type }}</td>
+    <td>{{ a.action_type }}{% if a.id in alerted %}<div><a href="/alerts" class="pill unknown" style="text-decoration:none">needs review</a><div class="note">{{ alerted[a.id]|join(', ') }}</div></div>{% endif %}</td>
     {% if by_agent|length > 1 or by_user|length > 1 %}<td class="note">{{ a.agent }}<br>{{ a.user }}</td>{% endif %}
     <td class="mono">
       {% if a.is_long %}

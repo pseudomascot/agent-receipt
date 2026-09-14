@@ -12,6 +12,7 @@ always safe: each tool call's own id is stored as `source_ref` (UNIQUE).
 import getpass
 import hashlib
 import json
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -25,7 +26,7 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "5"
+RULES_VERSION = "6"
 
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
 EXECUTE_TOOLS = {"Bash"}
@@ -36,11 +37,23 @@ ARTIFACT_WRITE_ACTIONS = {None, "publish", "write_db", "upload_asset", "delete_a
 # MCP tools are named mcp__<server>__<tool>. A tool whose name starts with one
 # of these is a read and is skipped. Everything else under mcp__ is logged.
 MCP_READ_PREFIXES = ("read", "get_", "list", "find", "search", "screenshot",
-                     "tabs_context", "status", "preview_list", "preview_logs")
+                     "tabs_context", "status", "preview_list", "preview_logs", "web_fetch",
+                     "wait", "zoom", "scroll", "app_screenshot", "app_ax_find", "app_list")
 # MCP tools (by their name after the server prefix) that only change the chat
-# or browser UI, not the world.
+# or browser UI, ask the user for permission, or otherwise don't touch the world.
 UI_ONLY_MCP_TOOLS = {"mark_chapter", "show_widget", "read_me", "tabs_select", "tabs_create",
-                     "tabs_close", "tabs_create_mcp", "tabs_close_mcp", "resize_window"}
+                     "tabs_close", "tabs_create_mcp", "tabs_close_mcp", "resize_window",
+                     "switch_browser", "select_browser", "present_files", "request_access",
+                     "request_cowork_directory", "request_full_control", "release_full_control",
+                     "request_teach_access", "app_release"}
+# MCP tools whose name says what kind of side effect they are. Checked after the
+# read/UI filters, by regular expression on the part after the server prefix.
+MCP_TYPE_PATTERNS = (
+    ("send_email", r"^(send_(e?mail|gmail)|gmail_send|mail_send|send_message_gmail)"),
+    ("create_event", r"^(create_(calendar_)?event|calendar_create|add_event|schedule_meeting)"),
+    ("purchase", r"^(purchase|place_order|checkout|create_(payment|charge|order)|pay$|buy)"),
+    ("post", r"^(send_message|post_message|send_sms|send_text|reply|post$|publish|tweet)"),
+)
 # MCP tools that run a shell command (Cowork's sandbox exposes one).
 MCP_SHELL_TOOLS = {"bash"}
 # Browser automation: `computer` actions that only look, and batch items that only look.
@@ -148,7 +161,12 @@ def classify(name: str, tool_input: dict):
             if not effects:
                 return None
             return "other", _clip(", ".join(dict.fromkeys(effects))), None
-        target = tool_input.get("url") or tool_input.get("file_path") or tool_input.get("text")
+        target = (tool_input.get("to") or tool_input.get("recipient") or tool_input.get("url")
+                  or tool_input.get("file_path") or tool_input.get("title") or tool_input.get("text")
+                  or tool_input.get("message"))
+        for action_type, pattern in MCP_TYPE_PATTERNS:
+            if re.match(pattern, tool):
+                return action_type, _clip(target), None
         return "other", _clip(target), None
     return None
 
@@ -325,6 +343,8 @@ def _rules_changed(conn: sqlite3.Connection) -> bool:
 
 def _reset_if_rules_changed(conn: sqlite3.Connection, full: bool) -> None:
     if full or _rules_changed(conn):
+        conn.execute("DELETE FROM alerts WHERE action_id IN (SELECT id FROM actions WHERE source = 'log')")
+        conn.execute("DELETE FROM meta WHERE key = 'alerts_evaluated_to'")
         conn.execute("DELETE FROM actions WHERE source = 'log'")
         conn.execute("DELETE FROM parser_state")
         conn.execute("DELETE FROM transcript_chunks")
