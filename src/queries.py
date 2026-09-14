@@ -190,11 +190,13 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
              if (not type_filter or a["action_type"] == type_filter)
              and (not agent_filter or a["agent"] == agent_filter)
              and (not user_filter or a["user"] == user_filter)]
+    # Newest first, like a bank statement: rows within a project, and projects by
+    # their latest action. (Exports stay chronological.)
     groups = {}
-    for a in shown:
+    for a in sorted(shown, key=lambda a: -a["timestamp"]):
         if a["attribution"] != "unknown":
             groups.setdefault(a["project"], []).append(a)
-    project_groups = sorted(groups.items(), key=lambda kv: -len(kv[1]))
+    project_groups = sorted(groups.items(), key=lambda kv: -kv[1][0]["timestamp"])
 
     intervals = conn.execute(
         "SELECT started_at, ended_at FROM coverage WHERE source = 'input' "
@@ -226,7 +228,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "shown": shown,
         "project_groups": project_groups,
         "shown_count": len(shown),
-        "unknown": [a for a in shown if a["attribution"] == "unknown"],
+        "unknown": sorted([a for a in shown if a["attribution"] == "unknown"], key=lambda a: -a["timestamp"]),
         "total": len(actions),
         "by_type": sorted(by_type.items(), key=lambda kv: -kv[1]),
         "by_attribution": by_attribution,

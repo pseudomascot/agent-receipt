@@ -100,6 +100,16 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     assert "10:20&ndash;10:40" in html
 
 
+def test_actions_are_newest_first(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    # proj-b's latest action (T+90) is newer than proj-a's (T+60): proj-b group comes first.
+    assert html.index("<h3>proj-b") < html.index("<h3>proj-a")
+    # Within proj-a, the T+60 command is listed above the T file write.
+    assert html.index("python3 build.py") < html.index("src/&lt;script&gt;")
+
+
 def test_day_page_type_filter(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)
