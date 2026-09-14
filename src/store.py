@@ -39,6 +39,17 @@ CREATE TABLE IF NOT EXISTS coverage (
     ended_at REAL NOT NULL
 );
 
+-- How far each transcript has been read, so refreshes only parse what's new.
+CREATE TABLE IF NOT EXISTS parser_state (
+    path TEXT PRIMARY KEY,
+    byte_offset INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_actions_timestamp ON actions (timestamp);
 CREATE INDEX IF NOT EXISTS idx_coverage_range ON coverage (source, started_at, ended_at);
 CREATE INDEX IF NOT EXISTS idx_input_events_timestamp ON input_events (timestamp);

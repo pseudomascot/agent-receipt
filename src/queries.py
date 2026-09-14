@@ -40,6 +40,12 @@ def _context(raw_json):
     return data.get("cwd"), data.get("session_id")
 
 
+def _reversibility_reason(note: str) -> str:
+    base = note.split(" | ", 1)[0]
+    marker = "; reversibility: "
+    return base.split(marker, 1)[1] if marker in base else ""
+
+
 def project_name(cwd) -> str:
     return Path(cwd).name if cwd else "(unknown project)"
 
@@ -99,6 +105,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
             "currency": r[6],
             "artifact_link": r[7],
             "reversible": {None: "not assessed", 0: "no", 1: "yes"}.get(r[8], "not assessed"),
+            "reversible_reason": _reversibility_reason(r[10] or ""),
             "attribution": r[9],
             "note": r[10] or "",
             "project": project_name(cwd),

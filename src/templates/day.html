@@ -58,7 +58,7 @@
       {% else %}{{ a.full_target }}{% endif %}
       {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{{ a.artifact_link }}</div>{% endif %}
     </td>
-    <td>{{ a.reversible }}</td>
+    <td>{{ a.reversible }}{% if a.reversible_reason %}<div class="note">{{ a.reversible_reason }}</div>{% endif %}</td>
     <td><span class="pill {{ a.attribution }}">{{ a.attribution }}</span><div class="note">{{ a.note.split(' | ')[-1] }}</div></td>
   </tr>
   {% endfor %}

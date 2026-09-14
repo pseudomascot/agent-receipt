@@ -1,8 +1,12 @@
 """Log parser: side-effect tool calls from Claude Code transcripts -> `actions`.
 
 Source format is documented in docs/SOURCES.md. Reads are skipped on purpose.
-Re-running is safe: each tool call's own id is stored as `source_ref` (UNIQUE),
-so already-seen calls are ignored.
+
+Incremental: a byte offset per transcript is kept in `parser_state`, so a
+refresh only parses what was appended. Re-running is always safe: each tool
+call's own id is stored as `source_ref` (UNIQUE). Bump RULES_VERSION whenever
+classification or reversibility rules change; every transcript is then read
+from the start again and existing rows are reconciled with the new rules.
 """
 
 import json
@@ -10,9 +14,11 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from reversibility import assess
 from shell_classify import is_read_only
 from store import DB_PATH, connect
 
+RULES_VERSION = "2"
 TRANSCRIPTS_ROOT = Path.home() / ".claude" / "projects"
 AGENT_NAME = "claude-code"
 
@@ -116,56 +122,83 @@ def _to_epoch(iso: str) -> float:
     return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
 
 
+def _base_note(session_id, reason) -> str:
+    note = f"declared in Claude Code transcript, session {session_id}"
+    return f"{note}; reversibility: {reason}" if reason else note
+
+
+def parse_lines(path: Path, lines):
+    """Yield one action dict per side-effect tool call. `lines` is (position, text)."""
+    for pos, line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for idx, block in enumerate(content):
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            name = block.get("name") or ""
+            tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+            classified = classify(name, tool_input)
+            if classified is None:
+                continue
+            action_type, target, artifact_link = classified
+            timestamp = entry.get("timestamp")
+            if not timestamp:
+                continue
+            session_id = entry.get("sessionId")
+            cwd = entry.get("cwd")
+            reversible, reason = assess(action_type, name, tool_input, target, cwd)
+            yield {
+                "timestamp": _to_epoch(timestamp),
+                "agent": AGENT_NAME,
+                "source": "log",
+                "action_type": action_type,
+                "target": target,
+                "amount": None,
+                "currency": None,
+                "artifact_link": artifact_link,
+                "reversible": reversible,
+                "attribution": "agent",
+                "confidence_note": _base_note(session_id, reason),
+                "raw_json": json.dumps({
+                    "tool": name,
+                    "input": _cap_strings(tool_input),
+                    "session_id": session_id,
+                    "cwd": cwd,
+                    "transcript": str(path),
+                }),
+                "source_ref": block.get("id") or f"{path.name}:{pos}:{idx}",
+            }
+
+
 def parse_file(path: Path):
-    """Yield one action dict per side-effect tool call in a transcript."""
     with open(path, encoding="utf-8") as f:
-        for line_no, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if entry.get("type") != "assistant":
-                continue
-            content = (entry.get("message") or {}).get("content")
-            if not isinstance(content, list):
-                continue
-            for idx, block in enumerate(content):
-                if not isinstance(block, dict) or block.get("type") != "tool_use":
-                    continue
-                name = block.get("name") or ""
-                tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-                classified = classify(name, tool_input)
-                if classified is None:
-                    continue
-                action_type, target, artifact_link = classified
-                timestamp = entry.get("timestamp")
-                if not timestamp:
-                    continue
-                session_id = entry.get("sessionId")
-                yield {
-                    "timestamp": _to_epoch(timestamp),
-                    "agent": AGENT_NAME,
-                    "source": "log",
-                    "action_type": action_type,
-                    "target": target,
-                    "amount": None,
-                    "currency": None,
-                    "artifact_link": artifact_link,
-                    "reversible": None,
-                    "attribution": "agent",
-                    "confidence_note": f"declared in Claude Code transcript, session {session_id}",
-                    "raw_json": json.dumps({
-                        "tool": name,
-                        "input": _cap_strings(tool_input),
-                        "session_id": session_id,
-                        "cwd": entry.get("cwd"),
-                        "transcript": str(path),
-                    }),
-                    "source_ref": block.get("id") or f"{path.name}:{line_no}:{idx}",
-                }
+        yield from parse_lines(path, enumerate(f, 1))
+
+
+def _read_new(path: Path, offset: int):
+    """Complete lines appended since `offset`, and the offset after them."""
+    size = path.stat().st_size
+    if size < offset:
+        offset = 0
+    with open(path, "rb") as f:
+        f.seek(offset)
+        data = f.read()
+    cut = data.rfind(b"\n")
+    if cut < 0:
+        return [], offset
+    complete = data[:cut + 1]
+    lines = complete.decode("utf-8", errors="replace").splitlines()
+    return [(f"{offset}+{i}", line) for i, line in enumerate(lines)], offset + len(complete)
 
 
 def find_transcripts(root: Path = TRANSCRIPTS_ROOT):
@@ -184,24 +217,43 @@ VALUES
 """
 
 
-def ingest(conn: sqlite3.Connection, paths=None) -> int:
-    """Parse every transcript and insert new actions. Returns how many were new."""
+def _rules_changed(conn: sqlite3.Connection) -> bool:
+    row = conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()
+    return row is None or row[0] != RULES_VERSION
+
+
+def ingest(conn: sqlite3.Connection, paths=None, full: bool = False) -> int:
+    """Parse what's new in every transcript and insert new actions. Returns how many were new."""
     if paths is None:
         paths = find_transcripts()
+    if full or _rules_changed(conn):
+        conn.execute("DELETE FROM parser_state")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_version', ?)",
+                     (RULES_VERSION,))
     before = conn.total_changes
     for path in paths:
-        conn.executemany(INSERT_SQL, parse_file(path))
+        row = conn.execute("SELECT byte_offset FROM parser_state WHERE path = ?", (str(path),)).fetchone()
+        lines, new_offset = _read_new(path, row[0] if row else 0)
+        if lines:
+            conn.executemany(INSERT_SQL, parse_lines(path, lines))
+        conn.execute("INSERT OR REPLACE INTO parser_state (path, byte_offset) VALUES (?, ?)",
+                     (str(path), new_offset))
     conn.commit()
-    return conn.total_changes - before
+    # total_changes counts the parser_state upserts too; subtract them.
+    return max(0, conn.total_changes - before - len(paths))
 
 
-def prune(conn: sqlite3.Connection) -> int:
-    """Delete log actions that the current rules no longer count as side effects.
+def reconcile(conn: sqlite3.Connection):
+    """Apply current rules to rows already in the database.
 
-    Rows whose stored input was truncated are kept: we can't re-judge them."""
-    rows = conn.execute("SELECT id, raw_json FROM actions WHERE source = 'log'").fetchall()
-    doomed = []
-    for action_id, raw in rows:
+    Deletes rows no longer counted as side effects and refreshes reversibility.
+    Rows whose stored input was truncated are left alone: we can't re-judge them.
+    Returns (removed, updated)."""
+    rows = conn.execute(
+        "SELECT id, raw_json, reversible, confidence_note FROM actions WHERE source = 'log'"
+    ).fetchall()
+    doomed, updates = [], []
+    for action_id, raw, reversible, note in rows:
         try:
             data = json.loads(raw or "")
         except ValueError:
@@ -209,24 +261,36 @@ def prune(conn: sqlite3.Connection) -> int:
         tool_input = data.get("input") if isinstance(data.get("input"), dict) else {}
         if "chars total]" in json.dumps(tool_input):
             continue
-        if classify(data.get("tool") or "", tool_input) is None:
+        tool = data.get("tool") or ""
+        classified = classify(tool, tool_input)
+        if classified is None:
             doomed.append((action_id,))
+            continue
+        action_type, target, _ = classified
+        new_rev, reason = assess(action_type, tool, tool_input, target, data.get("cwd"))
+        base = _base_note(data.get("session_id"), reason)
+        rest = (note or "").split(" | ", 1)
+        new_note = base + (" | " + rest[1] if len(rest) > 1 else "")
+        if new_rev != reversible or new_note != note:
+            updates.append((new_rev, new_note, action_id))
     conn.executemany("DELETE FROM actions WHERE id = ?", doomed)
+    conn.executemany("UPDATE actions SET reversible = ?, confidence_note = ? WHERE id = ?", updates)
     conn.commit()
-    return len(doomed)
+    return len(doomed), len(updates)
 
 
-def run(db_path: Path = DB_PATH) -> None:
+def run(db_path: Path = DB_PATH, full: bool = False) -> None:
     conn = connect(db_path)
     paths = find_transcripts()
-    pruned = prune(conn)
-    inserted = ingest(conn, paths)
+    removed, updated = reconcile(conn)
+    inserted = ingest(conn, paths, full=full)
     total = conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0]
     print(f"Scanned {len(paths)} transcript(s) under {TRANSCRIPTS_ROOT}")
-    print(f"Removed {pruned} row(s) no longer counted as side effects")
+    print(f"Reconciled existing rows: {removed} removed, {updated} updated")
     print(f"Inserted {inserted} new action(s); {total} total in {db_path}")
     conn.close()
 
 
 if __name__ == "__main__":
-    run()
+    import sys
+    run(full="--full" in sys.argv)

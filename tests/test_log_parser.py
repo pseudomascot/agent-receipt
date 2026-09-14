@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from log_parser import classify, ingest, parse_file, prune  # noqa: E402
+from log_parser import RULES_VERSION, classify, ingest, parse_file, reconcile  # noqa: E402
 from store import connect  # noqa: E402
 
 TS = "2026-09-14T10:00:00.000Z"
@@ -69,27 +69,71 @@ def test_classify_browser_side_effects():
     assert classify("mcp__claude-in-chrome__browser_batch", batch) == ("other", "navigate, type", None)
 
 
-def test_prune_removes_rows_under_new_rules(tmp_path):
+def _insert_raw(conn, ref, command, note="declared somewhere | agent log; no physical input"):
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref, confidence_note) "
+        "VALUES (1, 'a', 'log', 'execute', 'agent', ?, ?, ?)",
+        (json.dumps({"tool": "Bash", "input": {"command": command}, "session_id": "s9"}), ref, note),
+    )
+
+
+def test_reconcile_applies_current_rules_to_existing_rows(tmp_path):
     conn = connect(tmp_path / "t.db")
-    conn.execute(
-        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
-        "VALUES (1, 'a', 'log', 'execute', 'agent', ?, 'r1')",
-        (json.dumps({"tool": "Bash", "input": {"command": "ls"}}),),
-    )
-    conn.execute(
-        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
-        "VALUES (2, 'a', 'log', 'execute', 'agent', ?, 'r2')",
-        (json.dumps({"tool": "Bash", "input": {"command": "rm x"}}),),
-    )
-    conn.execute(
-        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
-        "VALUES (3, 'a', 'log', 'execute', 'agent', ?, 'r3')",
-        (json.dumps({"tool": "Bash", "input": {"command": "ls… [20000 chars total]"}}),),
-    )
+    _insert_raw(conn, "r1", "ls")                                   # no longer a side effect
+    _insert_raw(conn, "r2", "rm x")                                 # stays; gets reversible=0
+    _insert_raw(conn, "r3", "ls… [20000 chars total]")              # truncated: left alone
     conn.commit()
-    assert prune(conn) == 1
-    assert [r[0] for r in conn.execute("SELECT source_ref FROM actions ORDER BY id")] == ["r2", "r3"]
+    assert reconcile(conn) == (1, 1)
+    rows = conn.execute("SELECT source_ref, reversible, confidence_note FROM actions ORDER BY id").fetchall()
+    assert [r[0] for r in rows] == ["r2", "r3"]
+    assert rows[0][1] == 0
+    assert rows[0][2] == ("declared in Claude Code transcript, session s9; reversibility: deleted files are gone"
+                          " | agent log; no physical input")
+    assert reconcile(conn) == (0, 0)
     conn.close()
+
+
+def test_ingest_is_incremental(tmp_path):
+    path = tmp_path / "s.jsonl"
+    _write_transcript(path, [_assistant("Write", {"file_path": "/tmp/a"}, "toolu_a")])
+    conn = connect(tmp_path / "t.db")
+    assert ingest(conn, [path]) == 1
+    offset1 = conn.execute("SELECT byte_offset FROM parser_state").fetchone()[0]
+    assert offset1 == path.stat().st_size
+
+    with open(path, "a") as f:
+        f.write(json.dumps(_assistant("Write", {"file_path": "/tmp/b"}, "toolu_b")) + "\n")
+        f.write('{"partial line without newline')
+    assert ingest(conn, [path]) == 1
+    assert conn.execute("SELECT byte_offset FROM parser_state").fetchone()[0] < path.stat().st_size
+
+    # File shrank (rotated/rewritten): re-read from the start, dedup keeps the count right.
+    _write_transcript(path, [_assistant("Write", {"file_path": "/tmp/a"}, "toolu_a")])
+    assert ingest(conn, [path]) == 0
+    assert conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0] == 2
+    conn.close()
+
+
+def test_rules_version_change_rescans_everything(tmp_path):
+    path = _sample_transcript(tmp_path)
+    conn = connect(tmp_path / "t.db")
+    assert ingest(conn, [path]) == 3
+    assert conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()[0] == RULES_VERSION
+    conn.execute("UPDATE meta SET value = 'older' WHERE key = 'rules_version'")
+    conn.execute("DELETE FROM actions WHERE source_ref = 'toolu_bash'")
+    conn.commit()
+    assert ingest(conn, [path]) == 1                                # re-read from offset 0, found the missing one
+    assert conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()[0] == RULES_VERSION
+    conn.close()
+
+
+def test_parse_assesses_reversibility(tmp_path):
+    actions = list(parse_file(_sample_transcript(tmp_path)))
+    by_ref = {a["source_ref"]: a for a in actions}
+    assert by_ref["toolu_bash"]["reversible"] == 1                  # git commit
+    assert "reversibility: git keeps history" in by_ref["toolu_bash"]["confidence_note"]
+    assert by_ref["toolu_write"]["reversible"] is None              # /tmp/out.txt is not in a git repo
+    assert by_ref["toolu_write"]["confidence_note"] == "declared in Claude Code transcript, session sess-1"
 
 
 def test_classify_side_effects():

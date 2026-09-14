@@ -26,7 +26,8 @@ def _seed(db_path):
         [
             (T, "file_write", "/Users/marc/proj-a/src/<script>alert(1)</script>.txt", "agent", "agent log", _raw("/Users/marc/proj-a")),
             (T + 60, "execute", LONG_CMD, "agent", "x | agent log wins; physical input also present", _raw("/Users/marc/proj-a")),
-            (T + 90, "execute", "git commit -m hi", "agent", "agent log", _raw("/Users/marc/proj-b")),
+            (T + 90, "execute", "git commit -m hi", "agent",
+             "declared in transcript; reversibility: git keeps history | agent log", _raw("/Users/marc/proj-b")),
             (T + 120, "other", "https://example.com", "unknown", "no physical input and no agent log", _raw("/Users/marc/proj-b")),
             (T - 86400, "post", "yesterday.html", "human", "physical input present", _raw(None)),
         ],
@@ -66,6 +67,7 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     assert "src/&lt;script&gt;alert(1)&lt;/script&gt;.txt" in html   # relative to project
     assert "<details><summary>python3 build.py" in html             # long command collapsed, leading cd stripped
     assert "git commit -m hi" in html
+    assert "git keeps history" in html                               # reversibility reason shown
     assert "https://example.com" in html                             # Unknown section
     assert "yesterday.html" not in html
     assert "about 20 minute(s)" in html
