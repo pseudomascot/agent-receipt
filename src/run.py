@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from correlator import correlate
-from log_parser import find_transcripts, ingest, reconcile
+from log_parser import SOURCES, ingest_all, reconcile
 from statement import HOST, PORT
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, write_summary
@@ -22,13 +22,12 @@ SRC = Path(__file__).resolve().parent
 REFRESH_SECONDS = 300
 
 
-def refresh(db_path=DB_PATH, transcripts_root=None, summaries_dir=SUMMARIES_DIR) -> dict:
+def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR) -> dict:
     """Parse new log entries, re-attribute, and rewrite today's summary."""
     conn = connect(db_path)
     try:
-        paths = find_transcripts(transcripts_root) if transcripts_root else find_transcripts()
         removed, updated = reconcile(conn)
-        new = ingest(conn, paths)
+        new = ingest_all(conn, sources)
         counts = correlate(conn)
         write_summary(conn, date.today(), summaries_dir)
     finally:

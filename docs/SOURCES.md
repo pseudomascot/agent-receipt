@@ -30,6 +30,31 @@ Filled in during session 1 (2026-09-14), on Marc's Mac.
   tree back to `/Applications/Claude.app`, and finding this session's own
   transcript file in the expected place.
 
+## Cowork (Claude Desktop's "local agent mode") — added 2026-09-14
+- Log location: `~/Library/Application Support/Claude/local-agent-mode-sessions/<org>/<account>/local_<session>/audit.jsonl`,
+  with a sidecar `local_<session>.json` next to each session folder carrying
+  `title`, `cwd`, `sessionType` (`scheduled` for scheduled tasks), `scheduledTaskId`,
+  `createdAt`, `model`, `accountName`. 128 sessions / 5.9 GB on this machine as of
+  2026-09-14 (one file is 1.9 GB), 98 of them scheduled tasks.
+- Format: JSON Lines, the `claude` CLI's `--output-format stream-json` wrapped
+  by the desktop app: every line gets `_audit_timestamp` (ISO) and `_audit_hmac`.
+  Assistant lines carry `session_id`, `uuid`, and `message.content[]` with
+  `tool_use` blocks exactly like Claude Code. `cwd` is a path inside the
+  sandbox VM (`/sessions/<name>`), so the sidecar title is used as the project
+  label instead.
+- Side-effect entries to extract: same rules as Claude Code, plus
+  `mcp__workspace__bash` (the sandbox's shell) treated like `Bash`. Browser
+  actions arrive as `mcp__Claude_in_Chrome__*` — Claude in Chrome driven from
+  Cowork — and are classified by the same browser rules.
+- Agent label: `cowork` or `cowork (scheduled task)`. Scheduled tasks run with
+  nobody at the keyboard, which is exactly the case the receipt exists for.
+- Not used yet: `_audit_hmac` plus the `audit-key` files could later prove a
+  transcript was not edited after the fact — a stronger "how we know it was the
+  agent" than the log alone.
+- Performance: transcripts are streamed line by line and only lines containing
+  `"tool_use"` are JSON-parsed; the first pass over 5.9 GB takes minutes,
+  afterwards only appended bytes are read.
+
 ## Claude Desktop (regular chat, not the Code tab)
 - Checked: `~/Library/Logs/Claude/*.log` (main.log, claude.ai-web.log,
   cowork_vm_node.log, coworkd.log, etc.)

@@ -4,7 +4,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from log_parser import RULES_VERSION, classify, current_user, ingest, parse_file, reconcile  # noqa: E402
+from log_parser import (COWORK, RULES_VERSION, classify, current_user, ingest,  # noqa: E402
+                        ingest_all, parse_file, reconcile)
+from dataclasses import replace  # noqa: E402
 from store import connect  # noqa: E402
 
 TS = "2026-09-14T10:00:00.000Z"
@@ -129,6 +131,64 @@ def test_rules_version_change_rescans_everything(tmp_path):
     assert conn.execute("SELECT DISTINCT agent FROM actions").fetchall() == [("claude-code (claude-desktop)",)]
     assert conn.execute("SELECT value FROM meta WHERE key = 'rules_version'").fetchone()[0] == RULES_VERSION
     conn.close()
+
+
+def _cowork_entry(name, tool_input, tool_id, ts="2026-09-14T12:00:00.000Z"):
+    return {
+        "type": "assistant", "_audit_timestamp": ts, "_audit_hmac": "abc",
+        "session_id": "cw-1", "uuid": "u1",
+        "message": {"content": [{"type": "tool_use", "id": tool_id, "name": name, "input": tool_input}]},
+    }
+
+
+def _cowork_root(tmp_path, session_type="scheduled"):
+    root = tmp_path / "local-agent-mode-sessions"
+    sess = root / "org" / "acct" / "local_abc"
+    sess.mkdir(parents=True)
+    (root / "org" / "acct" / "local_abc.json").write_text(json.dumps({
+        "sessionId": "cw-1", "title": "Nightly inbox triage", "cwd": "/sessions/happy-curie",
+        "sessionType": session_type, "scheduledTaskId": "task-9",
+    }))
+    _write_transcript(sess / "audit.jsonl", [
+        {"type": "user", "_audit_timestamp": "2026-09-14T11:59:00.000Z", "message": {"content": "go"}},
+        _cowork_entry("mcp__workspace__bash", {"command": "ls -la"}, "cw_ls"),
+        _cowork_entry("mcp__workspace__bash", {"command": "rm -rf /sessions/happy-curie/tmp"}, "cw_rm"),
+        _cowork_entry("Edit", {"file_path": "/sessions/happy-curie/notes.md", "old_string": "a", "new_string": "b"}, "cw_edit"),
+        _cowork_entry("mcp__Claude_in_Chrome__navigate", {"url": "https://example.com", "tabId": "t"}, "cw_nav"),
+        _cowork_entry("Read", {"file_path": "/x"}, "cw_read"),
+    ])
+    return root
+
+
+def test_cowork_source_parses_audit_transcripts(tmp_path):
+    root = _cowork_root(tmp_path)
+    source = replace(COWORK, root=root)
+    conn = connect(tmp_path / "t.db")
+    assert ingest_all(conn, (source,)) == 3
+    rows = conn.execute(
+        "SELECT source_ref, agent, action_type, target, timestamp, confidence_note, raw_json FROM actions ORDER BY id"
+    ).fetchall()
+    assert [r[0] for r in rows] == ["cw_rm", "cw_edit", "cw_nav"]
+    assert all(r[1] == "cowork (scheduled task)" for r in rows)
+    assert rows[0][2] == "execute" and rows[0][3].startswith("rm -rf")
+    assert rows[0][4] == TS_EPOCH + 2 * 3600                         # _audit_timestamp, 12:00Z
+    assert rows[0][5].startswith("declared in cowork transcript, session cw-1; reversibility: deleted files are gone")
+    raw = json.loads(rows[1][6])
+    assert raw["project"] == "Nightly inbox triage" and raw["cwd"] == "/sessions/happy-curie" and raw["source"] == "cowork"
+    assert ingest_all(conn, (source,)) == 0
+    conn.close()
+
+
+def test_cowork_unscheduled_agent_label(tmp_path):
+    root = _cowork_root(tmp_path, session_type=None)
+    path = next(root.rglob("audit.jsonl"))
+    assert {a["agent"] for a in parse_file(path, replace(COWORK, root=root))} == {"cowork"}
+
+
+def test_prefilter_skips_lines_without_tool_use(tmp_path):
+    path = tmp_path / "s.jsonl"
+    path.write_text('{"type": "assistant", "timestamp": "%s", "message": {"content": [{"type": "text", "text": "hi"}]}}\n' % TS)
+    assert list(parse_file(path)) == []
 
 
 def test_reconcile_fills_missing_user(tmp_path):

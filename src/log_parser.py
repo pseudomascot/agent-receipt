@@ -1,45 +1,29 @@
-"""Log parser: side-effect tool calls from Claude Code transcripts -> `actions`.
+"""Log parser: side-effect tool calls from agent transcripts -> `actions`.
 
-Source format is documented in docs/SOURCES.md. Reads are skipped on purpose.
+Sources (documented in docs/SOURCES.md):
+- Claude Code: ~/.claude/projects/**/*.jsonl
+- Cowork (Claude Desktop's local agent mode): local-agent-mode-sessions/**/audit.jsonl
 
-Incremental: a byte offset per transcript is kept in `parser_state`, so a
-refresh only parses what was appended. Re-running is always safe: each tool
-call's own id is stored as `source_ref` (UNIQUE). Bump RULES_VERSION whenever
-classification or reversibility rules change; every transcript is then read
-from the start again and existing rows are reconciled with the new rules.
+Reads are skipped on purpose. Incremental: a byte offset per transcript is kept
+in `parser_state`, so a refresh only parses what was appended. Re-running is
+always safe: each tool call's own id is stored as `source_ref` (UNIQUE).
 """
 
 import getpass
 import json
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from reversibility import assess
 from shell_classify import is_read_only
 from store import DB_PATH, connect
 
-# Bumping this deletes every log-sourced row and re-extracts all transcripts
-# (cheap, a few seconds). Do it whenever what we extract, or how we judge it,
-# changes.
-RULES_VERSION = "3"
-TRANSCRIPTS_ROOT = Path.home() / ".claude" / "projects"
-AGENT_BASE = "claude-code"
-
-
-def agent_name(entry: dict) -> str:
-    entrypoint = entry.get("entrypoint")
-    name = f"{AGENT_BASE} ({entrypoint})" if entrypoint else AGENT_BASE
-    if entry.get("isSidechain"):
-        name += " › subagent"
-    return name
-
-
-def current_user() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:
-        return "unknown"
+# Bumping this deletes every log-sourced row and re-extracts all transcripts.
+# Do it whenever what we extract, or how we judge it, changes.
+RULES_VERSION = "4"
 
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
 EXECUTE_TOOLS = {"Bash"}
@@ -55,6 +39,8 @@ MCP_READ_PREFIXES = ("read", "get_", "list", "find", "search", "screenshot",
 # or browser UI, not the world.
 UI_ONLY_MCP_TOOLS = {"mark_chapter", "show_widget", "read_me", "tabs_select", "tabs_create",
                      "tabs_close", "tabs_create_mcp", "tabs_close_mcp", "resize_window"}
+# MCP tools that run a shell command (Cowork's sandbox exposes one).
+MCP_SHELL_TOOLS = {"bash"}
 # Browser automation: `computer` actions that only look, and batch items that only look.
 BROWSER_READ_ACTIONS = {"screenshot", "zoom", "wait", "scroll", "scroll_to", "hover"}
 BROWSER_READ_TOOLS = {"read_page", "find", "get_page_text", "read_console_messages",
@@ -65,12 +51,80 @@ TARGET_MAX_CHARS = 500
 RAW_STRING_MAX_CHARS = 10_000
 
 
+# --- sources -----------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Source:
+    name: str
+    root: Path
+    pattern: str
+    agent_name: Callable[[dict, dict], str]      # (entry, session_meta) -> label
+    timestamp: Callable[[dict], str | None]      # entry -> ISO string
+    session_meta: Callable[[Path], dict]         # transcript path -> metadata dict
+
+
+def _claude_code_agent(entry: dict, _meta: dict) -> str:
+    entrypoint = entry.get("entrypoint")
+    name = f"claude-code ({entrypoint})" if entrypoint else "claude-code"
+    if entry.get("isSidechain"):
+        name += " › subagent"
+    return name
+
+
+def _cowork_agent(_entry: dict, meta: dict) -> str:
+    return "cowork (scheduled task)" if meta.get("sessionType") == "scheduled" else "cowork"
+
+
+def _cowork_meta(path: Path) -> dict:
+    """Cowork keeps <session>/audit.jsonl next to <session>.json with title, cwd, type."""
+    sidecar = path.parent.with_suffix(".json")
+    try:
+        with open(sidecar, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return {
+        "title": data.get("title"),
+        "cwd": data.get("cwd"),
+        "sessionType": data.get("sessionType"),
+        "scheduledTaskId": data.get("scheduledTaskId"),
+    }
+
+
+CLAUDE_CODE = Source(
+    name="claude-code",
+    root=Path.home() / ".claude" / "projects",
+    pattern="*.jsonl",
+    agent_name=_claude_code_agent,
+    timestamp=lambda e: e.get("timestamp"),
+    session_meta=lambda _p: {},
+)
+COWORK = Source(
+    name="cowork",
+    root=Path.home() / "Library" / "Application Support" / "Claude" / "local-agent-mode-sessions",
+    pattern="audit.jsonl",
+    agent_name=_cowork_agent,
+    timestamp=lambda e: e.get("_audit_timestamp") or e.get("timestamp"),
+    session_meta=_cowork_meta,
+)
+SOURCES = (CLAUDE_CODE, COWORK)
+
+
+def current_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
+
+
+# --- classification ----------------------------------------------------------
+
 def classify(name: str, tool_input: dict):
     """Return (action_type, target, artifact_link) or None if not a side effect."""
     if name in FILE_WRITE_TOOLS:
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
         return "file_write", path, (f"file://{path}" if path else None)
-    if name in EXECUTE_TOOLS:
+    if name in EXECUTE_TOOLS or (name.startswith("mcp__") and name.split("__", 2)[-1] in MCP_SHELL_TOOLS):
         command = tool_input.get("command") or ""
         if is_read_only(command):
             return None
@@ -141,17 +195,22 @@ def _to_epoch(iso: str) -> float:
     return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
 
 
-def _base_note(session_id, reason) -> str:
-    note = f"declared in Claude Code transcript, session {session_id}"
+def _base_note(source: Source, session_id, reason) -> str:
+    where = "Claude Code transcript" if source.name == "claude-code" else f"{source.name} transcript"
+    note = f"declared in {where}, session {session_id}"
     return f"{note}; reversibility: {reason}" if reason else note
 
 
-def parse_lines(path: Path, lines):
+# --- parsing -----------------------------------------------------------------
+
+def parse_lines(path: Path, lines, source: Source = CLAUDE_CODE):
     """Yield one action dict per side-effect tool call. `lines` is (position, text)."""
     user = current_user()
+    meta = source.session_meta(path)
     for pos, line in lines:
-        line = line.strip()
-        if not line:
+        # Cheap prefilter: only lines carrying a tool call can matter, and in
+        # multi-GB transcripts most lines are tool results or chat.
+        if '"tool_use"' not in line:
             continue
         try:
             entry = json.loads(line)
@@ -162,6 +221,9 @@ def parse_lines(path: Path, lines):
         content = (entry.get("message") or {}).get("content")
         if not isinstance(content, list):
             continue
+        timestamp = source.timestamp(entry)
+        if not timestamp:
+            continue
         for idx, block in enumerate(content):
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
@@ -171,15 +233,12 @@ def parse_lines(path: Path, lines):
             if classified is None:
                 continue
             action_type, target, artifact_link = classified
-            timestamp = entry.get("timestamp")
-            if not timestamp:
-                continue
-            session_id = entry.get("sessionId")
-            cwd = entry.get("cwd")
+            session_id = entry.get("sessionId") or entry.get("session_id")
+            cwd = entry.get("cwd") or meta.get("cwd")
             reversible, reason = assess(action_type, name, tool_input, target, cwd)
             yield {
                 "timestamp": _to_epoch(timestamp),
-                "agent": agent_name(entry),
+                "agent": source.agent_name(entry, meta),
                 "user": user,
                 "source": "log",
                 "action_type": action_type,
@@ -189,13 +248,15 @@ def parse_lines(path: Path, lines):
                 "artifact_link": artifact_link,
                 "reversible": reversible,
                 "attribution": "agent",
-                "confidence_note": _base_note(session_id, reason),
+                "confidence_note": _base_note(source, session_id, reason),
                 "raw_json": json.dumps({
                     "tool": name,
                     "input": _cap_strings(tool_input),
                     "session_id": session_id,
                     "cwd": cwd,
+                    "project": meta.get("title"),
                     "transcript": str(path),
+                    "source": source.name,
                     "entrypoint": entry.get("entrypoint"),
                     "sidechain": bool(entry.get("isSidechain")),
                     "version": entry.get("version"),
@@ -204,31 +265,36 @@ def parse_lines(path: Path, lines):
             }
 
 
-def parse_file(path: Path):
+def parse_file(path: Path, source: Source = CLAUDE_CODE):
     with open(path, encoding="utf-8") as f:
-        yield from parse_lines(path, enumerate(f, 1))
+        yield from parse_lines(path, enumerate(f, 1), source)
 
 
-def _read_new(path: Path, offset: int):
-    """Complete lines appended since `offset`, and the offset after them."""
-    size = path.stat().st_size
-    if size < offset:
-        offset = 0
-    with open(path, "rb") as f:
-        f.seek(offset)
-        data = f.read()
-    cut = data.rfind(b"\n")
-    if cut < 0:
-        return [], offset
-    complete = data[:cut + 1]
-    lines = complete.decode("utf-8", errors="replace").splitlines()
-    return [(f"{offset}+{i}", line) for i, line in enumerate(lines)], offset + len(complete)
+class _NewLines:
+    """Streams complete lines appended since `offset`; `.offset` ends past the last one."""
+
+    def __init__(self, path: Path, offset: int):
+        size = path.stat().st_size
+        self.path = path
+        self.offset = 0 if size < offset else offset
+
+    def __iter__(self):
+        with open(self.path, "rb") as f:
+            f.seek(self.offset)
+            while True:
+                raw = f.readline()
+                if not raw or not raw.endswith(b"\n"):
+                    return
+                pos = self.offset
+                self.offset += len(raw)
+                yield pos, raw.decode("utf-8", errors="replace")
 
 
-def find_transcripts(root: Path = TRANSCRIPTS_ROOT):
+def find_transcripts(root=None, source: Source = CLAUDE_CODE):
+    root = Path(root) if root else source.root
     if not root.exists():
         return []
-    return sorted(root.rglob("*.jsonl"))
+    return sorted(root.rglob(source.pattern))
 
 
 INSERT_SQL = """
@@ -246,27 +312,37 @@ def _rules_changed(conn: sqlite3.Connection) -> bool:
     return row is None or row[0] != RULES_VERSION
 
 
-def ingest(conn: sqlite3.Connection, paths=None, full: bool = False) -> int:
-    """Parse what's new in every transcript and insert new actions. Returns how many were new."""
-    if paths is None:
-        paths = find_transcripts()
+def _reset_if_rules_changed(conn: sqlite3.Connection, full: bool) -> None:
     if full or _rules_changed(conn):
         conn.execute("DELETE FROM actions WHERE source = 'log'")
         conn.execute("DELETE FROM parser_state")
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_version', ?)",
                      (RULES_VERSION,))
         conn.commit()
-    before = conn.total_changes
+
+
+def ingest(conn: sqlite3.Connection, paths=None, full: bool = False,
+           source: Source = CLAUDE_CODE) -> int:
+    """Parse what's new in each transcript of one source. Returns how many actions were new."""
+    if paths is None:
+        paths = find_transcripts(source=source)
+    _reset_if_rules_changed(conn, full)
+    inserted = 0
     for path in paths:
         row = conn.execute("SELECT byte_offset FROM parser_state WHERE path = ?", (str(path),)).fetchone()
-        lines, new_offset = _read_new(path, row[0] if row else 0)
-        if lines:
-            conn.executemany(INSERT_SQL, parse_lines(path, lines))
+        reader = _NewLines(path, row[0] if row else 0)
+        before = conn.total_changes
+        conn.executemany(INSERT_SQL, parse_lines(path, reader, source))
+        inserted += conn.total_changes - before
         conn.execute("INSERT OR REPLACE INTO parser_state (path, byte_offset) VALUES (?, ?)",
-                     (str(path), new_offset))
-    conn.commit()
-    # total_changes counts the parser_state upserts too; subtract them.
-    return max(0, conn.total_changes - before - len(paths))
+                     (str(path), reader.offset))
+        conn.commit()
+    return inserted
+
+
+def ingest_all(conn: sqlite3.Connection, sources=SOURCES, full: bool = False) -> int:
+    _reset_if_rules_changed(conn, full)
+    return sum(ingest(conn, source=source) for source in sources)
 
 
 def reconcile(conn: sqlite3.Connection):
@@ -278,6 +354,7 @@ def reconcile(conn: sqlite3.Connection):
     rows = conn.execute(
         "SELECT id, raw_json, reversible, confidence_note FROM actions WHERE source = 'log'"
     ).fetchall()
+    by_name = {s.name: s for s in SOURCES}
     doomed, updates = [], []
     for action_id, raw, reversible, note in rows:
         try:
@@ -294,7 +371,8 @@ def reconcile(conn: sqlite3.Connection):
             continue
         action_type, target, _ = classified
         new_rev, reason = assess(action_type, tool, tool_input, target, data.get("cwd"))
-        base = _base_note(data.get("session_id"), reason)
+        source = by_name.get(data.get("source"), CLAUDE_CODE)
+        base = _base_note(source, data.get("session_id"), reason)
         rest = (note or "").split(" | ", 1)
         new_note = base + (" | " + rest[1] if len(rest) > 1 else "")
         if new_rev != reversible or new_note != note:
@@ -308,11 +386,11 @@ def reconcile(conn: sqlite3.Connection):
 
 def run(db_path: Path = DB_PATH, full: bool = False) -> None:
     conn = connect(db_path)
-    paths = find_transcripts()
     removed, updated = reconcile(conn)
-    inserted = ingest(conn, paths, full=full)
+    inserted = ingest_all(conn, full=full)
     total = conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0]
-    print(f"Scanned {len(paths)} transcript(s) under {TRANSCRIPTS_ROOT}")
+    for source in SOURCES:
+        print(f"{source.name}: {len(find_transcripts(source=source))} transcript(s) under {source.root}")
     print(f"Reconciled existing rows: {removed} removed, {updated} updated")
     print(f"Inserted {inserted} new action(s); {total} total in {db_path}")
     conn.close()

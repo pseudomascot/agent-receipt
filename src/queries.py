@@ -10,6 +10,8 @@ from pathlib import Path
 COVERAGE_NOTES = [
     ("Claude Code sessions (CLI and the desktop app's Code tab)", "covered",
      "Read from Claude Code's own transcripts. Every side-effect tool call is listed."),
+    ("Cowork (Claude Desktop's local agent mode, including scheduled tasks)", "covered",
+     "Read from Cowork's audit transcripts. Actions inside its sandbox and via Claude in Chrome are listed."),
     ("Physical keyboard/mouse activity", "partial",
      "Only while the input monitor is running; see the monitor intervals for each day."),
     ("Claude Desktop chat (not the Code tab)", "not covered",
@@ -33,11 +35,12 @@ def day_bounds(day: date):
 
 
 def _context(raw_json):
+    """(cwd, session_id, project label or None) from a row's raw_json."""
     try:
         data = json.loads(raw_json or "")
     except ValueError:
-        return None, None
-    return data.get("cwd"), data.get("session_id")
+        return None, None, None
+    return data.get("cwd"), data.get("session_id"), data.get("project")
 
 
 def _reversibility_reason(note: str) -> str:
@@ -46,7 +49,9 @@ def _reversibility_reason(note: str) -> str:
     return base.split(marker, 1)[1] if marker in base else ""
 
 
-def project_name(cwd) -> str:
+def project_name(cwd, label=None) -> str:
+    if label:
+        return label
     return Path(cwd).name if cwd else "(unknown project)"
 
 
@@ -71,7 +76,8 @@ def list_days(conn: sqlite3.Connection):
                                     "unknown": 0, "_projects": {}})
         entry[attribution] += 1
         entry["total"] += 1
-        name = project_name(_context(raw)[0])
+        cwd, _, label = _context(raw)
+        name = project_name(cwd, label)
         entry["_projects"][name] = entry["_projects"].get(name, 0) + 1
     for entry in days.values():
         top = sorted(entry.pop("_projects").items(), key=lambda kv: -kv[1])
@@ -90,7 +96,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
     ).fetchall()
     actions = []
     for r in rows:
-        cwd, session_id = _context(r[11])
+        cwd, session_id, label = _context(r[11])
         target = r[4] or ""
         shown = display_target(r[3], target, cwd)
         actions.append({
@@ -110,7 +116,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
             "reversible_reason": _reversibility_reason(r[10] or ""),
             "attribution": r[9],
             "note": r[10] or "",
-            "project": project_name(cwd),
+            "project": project_name(cwd, label),
             "session_id": session_id,
         })
 

@@ -5,6 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from dataclasses import replace
+
+from log_parser import CLAUDE_CODE  # noqa: E402
 from run import refresh  # noqa: E402
 from store import connect  # noqa: E402
 
@@ -24,8 +27,9 @@ def test_refresh_parses_correlates_and_writes_summary(tmp_path):
     _transcript(root / "s.jsonl", datetime.now().astimezone().isoformat())
     db = tmp_path / "t.db"
     out = tmp_path / "summaries"
+    sources = (replace(CLAUDE_CODE, root=tmp_path / "projects"),)
 
-    result = refresh(db, tmp_path / "projects", out)
+    result = refresh(db, sources, out)
     assert result == {"new": 1, "removed": 0, "updated": 0, "agent": 1, "human": 0, "unknown": 0}
     assert (out / f"{date.today().isoformat()}.txt").read_text().startswith("Agent Receipt")
 
@@ -34,4 +38,4 @@ def test_refresh_parses_correlates_and_writes_summary(tmp_path):
     assert "input monitor was not running" in note
     conn.close()
 
-    assert refresh(db, tmp_path / "projects", out)["new"] == 0
+    assert refresh(db, sources, out)["new"] == 0

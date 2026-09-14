@@ -26,8 +26,9 @@ action, and rewrites today's summary in `summaries/`.
 ### What it records
 - `input_events`: that a key or click happened, and when. Never which key,
   never where. Only while the `.command` window is open.
-- `actions`: every side-effect tool call found in Claude Code's own
-  transcripts (file writes, shell commands, browser actions, posts).
+- `actions`: every side-effect tool call found in the agents' own transcripts
+  — Claude Code and Claude Desktop's Cowork (including scheduled tasks):
+  file writes, shell commands, browser actions, posts.
 - `coverage`: when the input monitor was actually running, so the statement
   can say "not looking" instead of "nothing happened".
 
