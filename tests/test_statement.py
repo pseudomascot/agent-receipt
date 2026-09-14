@@ -91,7 +91,7 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     assert "&lt;script&gt;" in html and "<script>alert" not in html
     assert "<h3>proj-a" in html and "<h3>proj-b" in html
     assert "src/&lt;script&gt;alert(1)&lt;/script&gt;.txt" in html   # relative to project
-    assert "<details><summary>python3 build.py" in html             # long command collapsed, leading cd stripped
+    assert '<details class="screen-only"><summary>python3 build.py' in html   # collapsed, leading cd stripped
     assert "git commit -m hi" in html
     assert "git keeps history" in html                               # reversibility reason shown
     assert "https://example.com" in html                             # Unknown section
@@ -111,6 +111,35 @@ def test_day_page_type_filter(tmp_path):
     assert "<b>4</b>actions" in html                                  # totals stay for the whole day
     html = client.get(f"/day/{DAY}?type=bogus").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html                               # bad filter ignored
+
+
+def test_range_week_month_all_pages(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    client = create_app(db).test_client()
+    html = client.get("/range/2026-09-14/2026-09-13").get_data(as_text=True)   # reversed order is fine
+    assert "2026-09-13 to 2026-09-14" in html and "(2 days)" in html
+    assert "<b>5</b>actions" in html                                            # both days counted
+    assert "yesterday.html" in html and "git commit -m hi" in html
+    assert 'href="/day/2026-09-13">2026-09-13</a></td><td>1</td>' in html         # by-day table
+    assert "Download CSV (5 rows)" in html                                       # export includes unknown rows
+    html = client.get("/range/2026-09-13/2026-09-14?type=post").get_data(as_text=True)
+    assert "yesterday.html" in html and "git commit -m hi" not in html
+    assert 'href="/range/2026-09-13/2026-09-14?type=execute' in html            # chips keep the range
+    assert client.get("/week").status_code == 200
+    assert client.get("/month").status_code == 200
+    html = client.get("/all").get_data(as_text=True)
+    assert "2026-09-13 to" in html
+    assert client.get("/range/bad/2026-09-14").status_code == 404
+
+
+def test_print_markup_present(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    assert "@media print" in html
+    assert '<pre class="full print-only">' in html                              # long command printed in full
+    assert 'class="print-only note">Statement for 2026-09-14' in html
 
 
 def test_day_page_with_no_data(tmp_path):

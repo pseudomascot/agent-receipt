@@ -1,16 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Agent Receipt — {{ day }}{% endblock %}
+{% block title %}Agent Receipt — {{ label }}{% endblock %}
 {% block body %}
-<nav>
+{% set keep_agent = ('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '' %}
+{% set keep_user = ('&user=' ~ (user_filter|urlencode)) if user_filter else '' %}
+{% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
+<div class="print-only note">Statement for {{ label }}. Printed from the local Agent Receipt page.</div>
+
+<nav class="screen-only">
+  {% if single_day %}
   <a href="/day/{{ prev_day }}">&larr; {{ prev_day }}</a> &nbsp;|&nbsp;
   <b>{{ day }}</b> &nbsp;|&nbsp;
   <a href="/day/{{ next_day }}">{{ next_day }} &rarr;</a> &nbsp;|&nbsp;
-  <a href="/">All days</a>
+  {% else %}
+  <b>{{ label }}</b> ({{ days_in_range }} days) &nbsp;|&nbsp;
+  {% endif %}
+  <a href="/">All days</a> &nbsp;|&nbsp; <a href="/week">Last 7 days</a> &nbsp;|&nbsp;
+  <a href="/month">Last 30 days</a> &nbsp;|&nbsp; <a href="/all">All time</a>
+  &nbsp;|&nbsp; <a href="/export.csv?start={{ start }}&end={{ end }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}">Download CSV ({{ shown_count }} rows)</a>
+  &nbsp;|&nbsp; <a href="#" onclick="window.print();return false">Print</a>
 </nav>
 
-<h2>Daily summary</h2>
+<h2>{% if single_day %}Daily summary{% else %}Summary{% endif %}</h2>
 <pre class="summary">{{ summary }}</pre>
-<div class="note">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — run <code>src/summary.py {{ day }}</code>.{% endif %}</div>
+{% if single_day %}
+<div class="note screen-only">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — run <code>src/summary.py {{ day }}</code>.{% endif %}</div>
+{% endif %}
 
 <h2>Totals</h2>
 <div class="totals">
@@ -24,48 +38,56 @@
   "Human" and "unknown" only apply to actions seen through sources that don't say who acted (email, card, wallet — v2).
   A 0 there means "no such source yet", not "no human activity".</div>
 
-<h2>Input monitor on this day</h2>
+{% if not single_day and by_day %}
+<h2>By day</h2>
+<table class="compact">
+  <tr><th>Day</th><th>Actions</th></tr>
+  {% for d, n in by_day %}<tr><td><a href="/day/{{ d }}">{{ d }}</a></td><td>{{ n }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+
+<h2>Input monitor {% if single_day %}on this day{% else %}in this range{% endif %}</h2>
 {% if monitor_intervals %}
-<div class="note">Running for about {{ monitor_minutes }} minute(s):
-  {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}.
+<div class="note">Running for about {{ monitor_minutes }} minute(s)
+  {% if single_day %}: {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}across {{ monitor_intervals|length }} session(s){% endif %}.
   Outside these windows, "no physical input" cannot be distinguished from "not looking".
   {{ uncovered }} of {{ total }} actions happened while it was off.</div>
 {% else %}
-<div class="note">Not running at any point this day. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
+<div class="note">Not running at any point {% if single_day %}this day{% else %}in this range{% endif %}. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
 {% endif %}
 
 <h2>Actions</h2>
-{% set keep_agent = ('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '' %}
-{% set keep_user = ('&user=' ~ (user_filter|urlencode)) if user_filter else '' %}
-{% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
-<div class="filters">
+<div class="filters screen-only">
   <span class="note">Type:</span>
-  <a href="/day/{{ day }}?{{ keep_agent }}{{ keep_user }}" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
+  <a href="{{ base_url }}?{{ keep_agent }}{{ keep_user }}" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
   {% for type, n in by_type %}
-  <a href="/day/{{ day }}?type={{ type }}{{ keep_agent }}{{ keep_user }}" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
+  <a href="{{ base_url }}?type={{ type }}{{ keep_agent }}{{ keep_user }}" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
   {% endfor %}
   {% if by_project|length > 1 %}<span class="note" style="margin-left:12px">Projects: {% for p, n in by_project %}{{ p }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 </div>
 {% if by_agent|length > 1 %}
-<div class="filters">
+<div class="filters screen-only">
   <span class="note">Agent:</span>
-  <a href="/day/{{ day }}?{{ keep_type }}{{ keep_user }}" class="chip{% if not agent_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="/day/{{ day }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
 {% if by_user|length > 1 %}
-<div class="filters">
+<div class="filters screen-only">
   <span class="note">User:</span>
-  <a href="/day/{{ day }}?{{ keep_type }}{{ keep_agent }}" class="chip{% if not user_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
-  <a href="/day/{{ day }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
+  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
 {% if by_agent|length == 1 and by_user|length == 1 %}
 <div class="note" style="margin-bottom:6px">Agent: {{ by_agent[0][0] }} &middot; User: {{ by_user[0][0] }}. Filters for agent and user appear once there is more than one.</div>
+{% endif %}
+{% if type_filter or agent_filter or user_filter %}
+<div class="note print-only">Filtered: {% if type_filter %}type={{ type_filter }} {% endif %}{% if agent_filter %}agent={{ agent_filter }} {% endif %}{% if user_filter %}user={{ user_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions shown.</div>
 {% endif %}
 
 {% if project_groups %}
@@ -80,7 +102,8 @@
     {% if by_agent|length > 1 or by_user|length > 1 %}<td class="note">{{ a.agent }}<br>{{ a.user }}</td>{% endif %}
     <td class="mono">
       {% if a.is_long %}
-      <details><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>
+      <details class="screen-only"><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>
+      <pre class="full print-only">{{ a.full_target }}</pre>
       {% else %}{{ a.full_target }}{% endif %}
       {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{{ a.artifact_link }}</div>{% endif %}
     </td>
@@ -91,7 +114,7 @@
 </table>
 {% endfor %}
 {% else %}
-<div class="empty">No attributed actions{% if type_filter %} of type "{{ type_filter }}"{% endif %} on this day.</div>
+<div class="empty">No attributed actions{% if type_filter %} of type "{{ type_filter }}"{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
 {% endif %}
 
 <h2>Unknown</h2>

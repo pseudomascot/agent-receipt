@@ -85,12 +85,29 @@ def list_days(conn: sqlite3.Connection):
     return list(days.values())
 
 
+def earliest_day(conn: sqlite3.Connection) -> date | None:
+    row = conn.execute("SELECT MIN(timestamp) FROM actions").fetchone()
+    return datetime.fromtimestamp(row[0]).date() if row and row[0] else None
+
+
 def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None = None,
                   agent_filter: str | None = None, user_filter: str | None = None):
-    start, end = day_bounds(day)
+    return statement(conn, day, day, type_filter, agent_filter, user_filter)
+
+
+def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
+              type_filter: str | None = None, agent_filter: str | None = None,
+              user_filter: str | None = None):
+    """Everything the statement page and summary need for start_day..end_day inclusive."""
+    if end_day < start_day:
+        start_day, end_day = end_day, start_day
+    start = day_bounds(start_day)[0]
+    end = day_bounds(end_day)[1]
+    single_day = start_day == end_day
+    time_format = "%H:%M:%S" if single_day else "%Y-%m-%d %H:%M"
     rows = conn.execute(
         "SELECT id, timestamp, agent, action_type, target, amount, currency, artifact_link, "
-        "reversible, attribution, confidence_note, raw_json, user "
+        "reversible, attribution, confidence_note, raw_json, user, source_ref "
         "FROM actions WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp",
         (start, end),
     ).fetchall()
@@ -101,7 +118,9 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         shown = display_target(r[3], target, cwd)
         actions.append({
             "id": r[0],
-            "time": datetime.fromtimestamp(r[1]).strftime("%H:%M:%S"),
+            "timestamp": r[1],
+            "time": datetime.fromtimestamp(r[1]).strftime(time_format),
+            "day": datetime.fromtimestamp(r[1]).date().isoformat(),
             "agent": r[2],
             "user": r[12] or "(unknown user)",
             "action_type": r[3],
@@ -118,6 +137,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
             "note": r[10] or "",
             "project": project_name(cwd, label),
             "session_id": session_id,
+            "source_ref": r[13],
         })
 
     by_type = {}
@@ -125,6 +145,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
     by_project = {}
     by_agent = {}
     by_user = {}
+    by_day = {}
     money = {}
     file_targets = {}
     uncovered = 0
@@ -134,6 +155,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         by_project[a["project"]] = by_project.get(a["project"], 0) + 1
         by_agent[a["agent"]] = by_agent.get(a["agent"], 0) + 1
         by_user[a["user"]] = by_user.get(a["user"], 0) + 1
+        by_day[a["day"]] = by_day.get(a["day"], 0) + 1
         if a["amount"] is not None:
             cur = a["currency"] or "?"
             money[cur] = money.get(cur, 0) + a["amount"]
@@ -165,13 +187,21 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         monitor_intervals.append((datetime.fromtimestamp(s).strftime("%H:%M"),
                                   datetime.fromtimestamp(e).strftime("%H:%M")))
 
+    days_in_range = (end_day - start_day).days + 1
     return {
-        "day": day.isoformat(),
+        "day": start_day.isoformat(),
+        "start": start_day.isoformat(),
+        "end": end_day.isoformat(),
+        "single_day": single_day,
+        "days_in_range": days_in_range,
+        "label": start_day.isoformat() if single_day else f"{start_day.isoformat()} to {end_day.isoformat()}",
         "type_filter": type_filter,
         "agent_filter": agent_filter,
         "user_filter": user_filter,
         "by_agent": sorted(by_agent.items(), key=lambda kv: -kv[1]),
         "by_user": sorted(by_user.items(), key=lambda kv: -kv[1]),
+        "by_day": sorted(by_day.items(), reverse=True),
+        "shown": shown,
         "project_groups": project_groups,
         "shown_count": len(shown),
         "unknown": [a for a in shown if a["attribution"] == "unknown"],
@@ -184,6 +214,6 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
         "uncovered": uncovered,
         "monitor_intervals": monitor_intervals,
         "monitor_minutes": round(covered_seconds / 60),
-        "prev_day": (day - timedelta(days=1)).isoformat(),
-        "next_day": (day + timedelta(days=1)).isoformat(),
+        "prev_day": (start_day - timedelta(days=1)).isoformat(),
+        "next_day": (start_day + timedelta(days=1)).isoformat(),
     }

@@ -23,6 +23,11 @@ happened, never which one — see `src/input_monitor.py` and the schema in
 While it runs it re-reads the agent logs every 5 minutes, re-attributes every
 action, and rewrites today's summary in `summaries/`.
 
+On the page: one day, the last 7 or 30 days, or all time; filter by type,
+agent, or user; **Download CSV** for the current view (opens in Excel or
+Google Sheets; the footer carries a SHA-256 and the command to verify the rows
+were not altered); **Print** for a paper statement or a PDF.
+
 ### What it records
 - `input_events`: that a key or click happened, and when. Never which key,
   never where. Only while the `.command` window is open.

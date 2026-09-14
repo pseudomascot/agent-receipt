@@ -16,9 +16,13 @@ SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
 
 
 def build_summary(conn: sqlite3.Connection, day: date) -> str:
-    s = day_statement(conn, day)
+    return summary_text(day_statement(conn, day))
+
+
+def summary_text(s: dict) -> str:
+    """Plain-text summary of a statement dict (a day or a range)."""
     a = s["by_attribution"]
-    lines = [f"Agent Receipt — {s['day']}"]
+    lines = [f"Agent Receipt — {s.get('label', s['day'])}"]
 
     if s["total"] == 0:
         lines.append("No agent actions recorded.")
@@ -38,11 +42,15 @@ def build_summary(conn: sqlite3.Connection, day: date) -> str:
             lines.append("Most-written files: " + "; ".join(
                 f"{Path(t).name} ({n}x)" if n > 1 else Path(t).name for t, n in s["top_files"]) + ".")
 
-    if s["monitor_intervals"]:
+    if s["monitor_intervals"] and s.get("single_day", True):
         spans = ", ".join(f"{b}–{e}" for b, e in s["monitor_intervals"])
         lines.append(f"Input monitor: on for about {s['monitor_minutes']} min ({spans}).")
+    elif s["monitor_intervals"]:
+        lines.append(f"Input monitor: on for about {s['monitor_minutes']} min across "
+                     f"{len(s['monitor_intervals'])} session(s).")
     else:
-        lines.append("Input monitor: off all day.")
+        lines.append("Input monitor: off all day." if s.get("single_day", True)
+                     else "Input monitor: off for the whole range.")
     if s["total"]:
         lines.append(f"{s['uncovered']} of {s['total']} actions happened while the monitor was off.")
 
