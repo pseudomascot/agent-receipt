@@ -118,6 +118,7 @@ def test_day_page_type_filter(tmp_path):
     assert "git commit -m hi" in html
     assert "src/&lt;script&gt;" not in html                           # file_write row hidden
     assert 'class="chip on">execute (2)' in html
+    assert 'id="actions"' in html and f'/day/{DAY}?type=file_write#actions' in html   # chips land on the Actions heading
     assert "<b>4</b>actions" in html                                  # totals stay for the whole day
     html = client.get(f"/day/{DAY}?type=bogus").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html                               # bad filter ignored

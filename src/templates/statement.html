@@ -56,30 +56,30 @@
 <div class="note">Not running at any point {% if single_day %}this day{% else %}in this range{% endif %}. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
 {% endif %}
 
-<h2>Actions</h2>
+<h2 id="actions">Actions</h2>
 <div class="filters screen-only">
   <span class="note">Type:</span>
-  <a href="{{ base_url }}?{{ keep_agent }}{{ keep_user }}" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
+  <a href="{{ base_url }}?{{ keep_agent }}{{ keep_user }}#actions" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
   {% for type, n in by_type %}
-  <a href="{{ base_url }}?type={{ type }}{{ keep_agent }}{{ keep_user }}" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
+  <a href="{{ base_url }}?type={{ type }}{{ keep_agent }}{{ keep_user }}#actions" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
   {% endfor %}
   {% if by_project|length > 1 %}<span class="note" style="margin-left:12px">Projects: {% for p, n in by_project %}{{ p }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 </div>
 {% if by_agent|length > 1 %}
 <div class="filters screen-only">
   <span class="note">Agent:</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}" class="chip{% if not agent_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
 {% if by_user|length > 1 %}
 <div class="filters screen-only">
   <span class="note">User:</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}" class="chip{% if not user_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
-  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
+  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
