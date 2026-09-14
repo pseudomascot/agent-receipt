@@ -29,7 +29,7 @@ def test_refresh_parses_correlates_and_writes_summary(tmp_path):
     out = tmp_path / "summaries"
     sources = (replace(CLAUDE_CODE, root=tmp_path / "projects"),)
 
-    result = refresh(db, sources, out, notifier=lambda t, m: None)
+    result = refresh(db, sources, out, notifier=lambda t, m: None, email=False)
     assert result == {"new": 1, "removed": 0, "updated": 0, "alerts": 0, "notified": 0,
                       "agent": 1, "human": 0, "unknown": 0}
     assert (out / f"{date.today().isoformat()}.txt").read_text().startswith("Agent Receipt")
@@ -39,4 +39,4 @@ def test_refresh_parses_correlates_and_writes_summary(tmp_path):
     assert "input monitor was not running" in note
     conn.close()
 
-    assert refresh(db, sources, out, notifier=lambda t, m: None)["new"] == 0
+    assert refresh(db, sources, out, notifier=lambda t, m: None, email=False)["new"] == 0

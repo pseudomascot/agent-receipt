@@ -9,7 +9,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from queries import NOT_COVERED, day_statement
+from queries import day_statement, not_covered
 from store import DB_PATH, connect
 
 SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
@@ -64,7 +64,7 @@ def summary_text(s: dict, integrity: str | None = None, needs_review: int | None
     if needs_review is not None:
         lines.append(f"Needs review: {needs_review} open alert(s)." if needs_review else "Needs review: none.")
 
-    lines.append("Not covered: " + "; ".join(NOT_COVERED) + ".")
+    lines.append("Not covered: " + "; ".join(not_covered()) + ".")
     if integrity:
         lines.append(integrity.splitlines()[0])
     return "\n".join(lines) + "\n"

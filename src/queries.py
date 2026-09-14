@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # What the receipt can and cannot see. Shown on every page so gaps are never silent.
-COVERAGE_NOTES = [
+STATIC_COVERAGE = [
     ("Claude Code sessions (CLI and the desktop app's Code tab)", "covered",
      "Read from Claude Code's own transcripts. Every side-effect tool call is listed."),
     ("Cowork (Claude Desktop's local agent mode, including scheduled tasks)", "covered",
@@ -22,11 +22,27 @@ COVERAGE_NOTES = [
      "Only while the input monitor is running; see the monitor intervals for each day."),
     ("Claude Desktop chat (not the Code tab)", "not covered",
      "Keeps no usable local log; its actions do not appear here."),
-    ("Email, card, and wallet activity", "not covered",
-     "Planned for v2."),
 ]
 
-NOT_COVERED = [name for name, status, _ in COVERAGE_NOTES if status == "not covered"]
+
+def coverage_notes(email_on: bool | None = None) -> list:
+    if email_on is None:
+        from config import email_configured
+        email_on = email_configured()
+    dynamic = [
+        ("Email sent from the agent's mailbox", "covered" if email_on else "not covered",
+         "Polled read-only over IMAP from the mailbox in .env." if email_on
+         else "Set RECEIPT_IMAP_USER / RECEIPT_IMAP_PASSWORD in .env (docs/EMAIL.md)."),
+        ("Card charges (issuer alert emails)", "covered" if email_on else "not covered",
+         "Recognised alert emails in the agent mailbox become purchases." if email_on
+         else "Same mailbox setup; alerts must be routed to it."),
+        ("Crypto wallet", "not covered", "Planned."),
+    ]
+    return STATIC_COVERAGE + dynamic
+
+
+def not_covered(email_on: bool | None = None) -> list:
+    return [name for name, status, _ in coverage_notes(email_on) if status == "not covered"]
 ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
 
 # A leading `cd "<dir>" && ` says where, which the Project column already shows.

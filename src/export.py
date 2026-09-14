@@ -10,7 +10,7 @@ import hashlib
 import io
 from datetime import datetime
 
-from queries import COVERAGE_NOTES
+from queries import coverage_notes
 
 COLUMNS = ["timestamp", "date", "time", "agent", "user", "project", "action_type", "target",
            "reversible", "reversible_reason", "attribution", "attribution_note",
@@ -35,7 +35,7 @@ def export_csv(conn, stats: dict, filters: dict) -> str:
     fw.writerow(["# range", stats["label"]])
     fw.writerow(["# filters", ", ".join(f"{k}={v}" for k, v in filters.items() if v) or "none"])
     fw.writerow(["# rows", len(rows)])
-    for name, status, detail in COVERAGE_NOTES:
+    for name, status, detail in coverage_notes():
         fw.writerow([f"# coverage: {name}", status, detail])
     fw.writerow(["# input monitor", f"about {stats['monitor_minutes']} min in this range; "
                  f"{stats['uncovered']} of {stats['total']} actions happened while it was off"])

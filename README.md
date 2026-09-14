@@ -49,9 +49,16 @@ were not altered); **Print** for a paper statement or a PDF.
   logs, re-checked every few hours, so the statement can say the logs were
   not altered after the receipt read them.
 
+### Email and card charges (optional)
+Give the agent its own mailbox and put its IMAP login in a git-ignored
+`.env` (`cp .env.example .env`; steps in `docs/EMAIL.md`). Sent mail becomes
+`send_email` rows and card-issuer alert emails become `purchase` rows; the
+correlator then says agent, human, or unknown for each from the evidence.
+
 ### What it does not see
-Claude Desktop chat (outside the Code tab), email, cards, wallets. The page
-says so on every screen.
+Claude Desktop chat (outside the Code tab), Google Antigravity, and — until
+the mailbox is configured — email, cards, and wallets. The page says so on
+every screen.
 
 ## For developers
 ```

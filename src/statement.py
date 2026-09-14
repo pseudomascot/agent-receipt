@@ -10,7 +10,7 @@ from flask import Flask, Response, abort, redirect, render_template, request
 
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from export import export_csv
-from queries import ACTION_TYPES, COVERAGE_NOTES, day_bounds, earliest_day, list_days, statement
+from queries import ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, statement
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, summary_text
 from verify import status_line
@@ -61,7 +61,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
         return render_template(
-            "statement.html", coverage_notes=COVERAGE_NOTES,
+            "statement.html", coverage_notes=coverage_notes(),
             summary=summary_text(data, integrity, open_alerts),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
             integrity=integrity, alerted=alerted, query=request.query_string.decode(), **data)
@@ -74,7 +74,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             integrity = status_line(conn)
         finally:
             conn.close()
-        return render_template("index.html", days=days, coverage_notes=COVERAGE_NOTES,
+        return render_template("index.html", days=days, coverage_notes=coverage_notes(),
                                integrity=integrity, today=date.today().isoformat())
 
     @app.route("/day/<day_str>")
@@ -116,7 +116,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             integrity = status_line(conn)
         finally:
             conn.close()
-        return render_template("alerts.html", items=items, coverage_notes=COVERAGE_NOTES,
+        return render_template("alerts.html", items=items, coverage_notes=coverage_notes(),
                                integrity=integrity)
 
     @app.route("/alerts/seen", methods=["POST"])
