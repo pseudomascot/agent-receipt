@@ -37,8 +37,12 @@ were not altered); **Print** for a paper statement or a PDF.
 - `input_events`: that a key or click happened, and when. Never which key,
   never where. Only while the `.command` window is open.
 - `actions`: every side-effect tool call found in the agents' own transcripts
-  — Claude Code and Claude Desktop's Cowork (including scheduled tasks):
-  file writes, shell commands, browser actions, posts.
+  — Claude Code, Claude Desktop's Cowork (including scheduled tasks), and
+  OpenAI's Codex: file writes, shell commands, browser actions, posts.
+  Any other agent joins by appending one JSON line per side effect to
+  `~/.agent-receipt/inbox/` — see `docs/RECEIPT_LINE.md` and `examples/`.
+  The model provider (OpenAI, Anthropic, Google, OpenRouter…) is irrelevant;
+  what matters is the harness that acts, and whether it leaves a record.
 - `coverage`: when the input monitor was actually running, so the statement
   can say "not looking" instead of "nothing happened".
 - `transcript_chunks`: a SHA-256 of every byte range read from the agents'

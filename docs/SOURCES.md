@@ -68,6 +68,42 @@ Filled in during session 1 (2026-09-14), on Marc's Mac.
   `"tool_use"` are JSON-parsed; the first pass over 5.9 GB takes minutes,
   afterwards only appended bytes are read.
 
+## Codex (OpenAI) — added 2026-09-14
+- Log location: `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<id>.jsonl`
+  (8 sessions / 346 MB on this machine; the app is `com.openai.codex`, no CLI
+  on PATH). `~/.codex/thread_history_1.sqlite` holds the same items in a
+  `thread_items` table; the rollout files are used because they are
+  append-only and fit the streaming/hashing reader.
+- Format: JSON Lines with `timestamp` (ISO), `type`, `payload`, `ordinal`.
+  Line 1 is `session_meta` (`payload.cwd`, `payload.id`, `payload.originator`
+  such as `codex_work_desktop`, `payload.source`). Actions are `event_msg`
+  lines whose `payload.type` is `item_completed`; `payload.item.type` is one of
+  `CommandExecution` (command, cwd, exit_code), `FileChange` (changes[] with
+  path and kind add/update/delete), `McpToolCall` (server, tool, arguments),
+  `Extension` (e.g. image generation with savedPath), plus non-actions
+  (Reasoning, AgentMessage, SubAgentActivity, CollabAgentToolCall…).
+- Side-effect entries: CommandExecution → `execute` (same read-only filter as
+  Bash); FileChange add/update → `file_write`, delete → `file_write` marked
+  irreversible; McpToolCall → the same MCP rules; Extension with a savedPath →
+  `file_write`. `response_item` function calls (`send_message`, `spawn_agent`,
+  `wait_agent`…) are Codex's internal multi-agent chatter and are ignored.
+- Agent label: `codex (<originator>)`.
+- Quirks seen in real data: `command` is an argv list, almost always
+  `["/bin/zsh", "-lc", "<the real command>"]` — the parser unwraps that so the
+  read-only filter and the page see the real command; `changes[]` entries are
+  sometimes bare path strings instead of objects (treated as an edit of that
+  path).
+
+## Inbox — receipt lines any agent writes itself (added 2026-09-14)
+- `~/.agent-receipt/inbox/*.jsonl`, format in docs/RECEIPT_LINE.md, helpers in
+  `examples/`. The agent declares the action type, target, amount, id,
+  reversibility. Note reads "declared by the agent itself via the receipt inbox".
+
+## Google Antigravity — not covered
+- `~/.gemini/antigravity/conversations/*.pb` (14 files, 83 MB) and `brain/`
+  (md/json/png). Conversations are protobuf with no published schema; not
+  readable without it. Revisit if Google documents the format.
+
 ## Claude Desktop (regular chat, not the Code tab)
 - Checked: `~/Library/Logs/Claude/*.log` (main.log, claude.ai-web.log,
   cowork_vm_node.log, coworkd.log, etc.)

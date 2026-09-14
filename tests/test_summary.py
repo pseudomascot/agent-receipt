@@ -43,7 +43,7 @@ def test_build_summary_text(tmp_path):
         "2 of 4 actions happened while the monitor was off.",
         "Unknown: 1 action(s) nobody can be confirmed for — review them.",
         "Needs review: none.",
-        "Not covered: Claude Desktop chat (not the Code tab); Email, card, and wallet activity.",
+        "Not covered: Google Antigravity; Claude Desktop chat (not the Code tab); Email, card, and wallet activity.",
     ]
     conn.close()
 

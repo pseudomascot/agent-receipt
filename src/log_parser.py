@@ -1,21 +1,27 @@
-"""Log parser: side-effect tool calls from agent transcripts -> `actions`.
+"""Log parser: side-effect actions from agent transcripts -> `actions`.
 
 Sources (documented in docs/SOURCES.md):
 - Claude Code: ~/.claude/projects/**/*.jsonl
 - Cowork (Claude Desktop's local agent mode): local-agent-mode-sessions/**/audit.jsonl
+- Codex (OpenAI): ~/.codex/sessions/**/*.jsonl
+- Inbox: ~/.agent-receipt/inbox/*.jsonl — lines any agent writes itself (docs/RECEIPT_LINE.md)
 
-Reads are skipped on purpose. Incremental: a byte offset per transcript is kept
-in `parser_state`, so a refresh only parses what was appended. Re-running is
-always safe: each tool call's own id is stored as `source_ref` (UNIQUE).
+Each source says how to turn one transcript line into zero or more `Call`s (a
+tool name plus its input, or a declared action). Reads are skipped on purpose.
+Incremental: a byte offset per transcript is kept in `parser_state`, so a
+refresh only parses what was appended. Re-running is always safe: each call's
+own id is stored as `source_ref` (UNIQUE).
 """
 
 import getpass
 import hashlib
 import json
 import re
+import shlex
 import sqlite3
+import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -26,8 +32,9 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "6"
+RULES_VERSION = "8"
 
+ACTION_TYPES = {"send_email", "create_event", "purchase", "file_write", "post", "execute", "other"}
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
 EXECUTE_TOOLS = {"Bash"}
 POST_TOOLS = {"SendUserFile"}
@@ -46,6 +53,8 @@ UI_ONLY_MCP_TOOLS = {"mark_chapter", "show_widget", "read_me", "tabs_select", "t
                      "switch_browser", "select_browser", "present_files", "request_access",
                      "request_cowork_directory", "request_full_control", "release_full_control",
                      "request_teach_access", "app_release"}
+# MCP tools that run a shell command (Cowork's sandbox exposes one).
+MCP_SHELL_TOOLS = {"bash"}
 # MCP tools whose name says what kind of side effect they are. Checked after the
 # read/UI filters, by regular expression on the part after the server prefix.
 MCP_TYPE_PATTERNS = (
@@ -54,8 +63,6 @@ MCP_TYPE_PATTERNS = (
     ("purchase", r"^(purchase|place_order|checkout|create_(payment|charge|order)|pay$|buy)"),
     ("post", r"^(send_message|post_message|send_sms|send_text|reply|post$|publish|tweet)"),
 )
-# MCP tools that run a shell command (Cowork's sandbox exposes one).
-MCP_SHELL_TOOLS = {"bash"}
 # Browser automation: `computer` actions that only look, and batch items that only look.
 BROWSER_READ_ACTIONS = {"screenshot", "zoom", "wait", "scroll", "scroll_to", "hover"}
 BROWSER_READ_TOOLS = {"read_page", "find", "get_page_text", "read_console_messages",
@@ -66,16 +73,48 @@ TARGET_MAX_CHARS = 500
 RAW_STRING_MAX_CHARS = 10_000
 
 
-# --- sources -----------------------------------------------------------------
+# --- calls and sources -------------------------------------------------------
+
+@dataclass
+class Call:
+    """One thing an agent did, as a tool name + input (the shape classify() reads)."""
+    name: str
+    input: dict
+    call_id: str | None = None
+    session_id: str | None = None
+    cwd: str | None = None
+    # Optional facts the source already knows, which win over classify()/assess():
+    # action_type, target, artifact_link, amount, currency, reversible, reason, agent.
+    overrides: dict = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class Source:
     name: str
     root: Path
     pattern: str
+    extract: Callable[[dict, dict], list]        # (entry, session_meta) -> [Call]
     agent_name: Callable[[dict, dict], str]      # (entry, session_meta) -> label
     timestamp: Callable[[dict], str | None]      # entry -> ISO string
     session_meta: Callable[[Path], dict]         # transcript path -> metadata dict
+    line_hint: str | None = None                 # substring a useful line must contain
+
+
+def _tool_use_calls(entry: dict, meta: dict) -> list:
+    """Claude Code and Cowork: assistant messages with tool_use content blocks."""
+    if entry.get("type") != "assistant":
+        return []
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list):
+        return []
+    session_id = entry.get("sessionId") or entry.get("session_id")
+    cwd = entry.get("cwd") or meta.get("cwd")
+    calls = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "tool_use":
+            tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+            calls.append(Call(block.get("name") or "", tool_input, block.get("id"), session_id, cwd))
+    return calls
 
 
 def _claude_code_agent(entry: dict, _meta: dict) -> str:
@@ -106,23 +145,152 @@ def _cowork_meta(path: Path) -> dict:
     }
 
 
+def _codex_meta(path: Path) -> dict:
+    """Codex rollouts start with a session_meta line: cwd, id, originator, source."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            first = json.loads(f.readline())
+    except (OSError, ValueError):
+        return {}
+    if first.get("type") != "session_meta":
+        return {}
+    payload = first.get("payload") or {}
+    return {"cwd": payload.get("cwd"), "session_id": payload.get("id"),
+            "originator": payload.get("originator"), "source": payload.get("source")}
+
+
+def _codex_calls(entry: dict, meta: dict) -> list:
+    """Codex: event_msg lines whose payload is a completed typed item."""
+    payload = entry.get("payload") or {}
+    if entry.get("type") != "event_msg" or payload.get("type") != "item_completed":
+        return []
+    item = payload.get("item") or {}
+    kind = item.get("type")
+    item_id = item.get("id")
+    sid = meta.get("session_id")
+    cwd = item.get("cwd") or meta.get("cwd")
+    if isinstance(cwd, str) and cwd.startswith("file://"):
+        cwd = cwd[len("file://"):]
+    if kind == "CommandExecution":
+        return [Call("Bash", {"command": _command_text(item.get("command")), "cwd": cwd,
+                              "exit_code": item.get("exit_code")}, item_id, sid, cwd)]
+    if kind == "FileChange":
+        calls = []
+        for i, change in enumerate(item.get("changes") or []):
+            if isinstance(change, str):
+                change = {"path": change}
+            if not isinstance(change, dict):
+                continue
+            path = change.get("path")
+            kind = change.get("kind")
+            kind_type = ((kind.get("type") if isinstance(kind, dict) else kind) or "").lower()
+            if kind_type == "delete":
+                calls.append(Call("codex:file_delete", {"file_path": path}, f"{item_id}:{i}", sid, cwd,
+                                  {"action_type": "file_write", "target": path,
+                                   "reversible": 0, "reason": "file deleted"}))
+            else:
+                tool = "Write" if kind_type == "add" else "Edit"
+                calls.append(Call(tool, {"file_path": path}, f"{item_id}:{i}", sid, cwd))
+        return calls
+    if kind == "McpToolCall":
+        args = item.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except ValueError:
+                args = {"arguments": args}
+        return [Call(f"mcp__{item.get('server')}__{item.get('tool')}", args if isinstance(args, dict) else {},
+                     item_id, sid, cwd)]
+    if kind == "Extension" and item.get("savedPath"):
+        return [Call("Write", {"file_path": item["savedPath"]}, item_id, sid, cwd,
+                     {"reason": f"generated by {item.get('kind') or 'extension'}"})]
+    return []
+
+
+SHELL_WRAPPERS = {"sh", "bash", "zsh", "dash", "fish"}
+
+
+def _command_text(command) -> str:
+    """Codex stores commands as argv lists, usually `/bin/zsh -lc '<command>'`.
+
+    Unwrap that so the real command is what gets classified and shown."""
+    if isinstance(command, list):
+        argv = [str(part) for part in command]
+        if (len(argv) >= 3 and argv[0].rsplit("/", 1)[-1] in SHELL_WRAPPERS
+                and argv[1].startswith("-") and "c" in argv[1]):
+            return " ".join([argv[2]] + argv[3:])
+        return shlex.join(argv)
+    return "" if command is None else str(command)
+
+
+def _codex_agent(_entry: dict, meta: dict) -> str:
+    origin = meta.get("originator") or meta.get("source")
+    return f"codex ({origin})" if origin else "codex"
+
+
+def _inbox_calls(entry: dict, _meta: dict) -> list:
+    """A receipt line another agent wrote itself. See docs/RECEIPT_LINE.md."""
+    action = entry.get("action")
+    if not entry.get("agent") or action not in ACTION_TYPES:
+        return []
+    detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else {}
+    reversible = entry.get("reversible")
+    overrides = {
+        "action_type": action,
+        "target": entry.get("target"),
+        "artifact_link": entry.get("link"),
+        "amount": entry.get("amount"),
+        "currency": entry.get("currency"),
+        "agent": str(entry["agent"]),
+    }
+    if reversible is True or reversible is False:
+        overrides["reversible"] = int(reversible)
+        overrides["reason"] = entry.get("reason") or "declared by the agent"
+    call_id = entry.get("id") or hashlib.sha256(
+        json.dumps(entry, sort_keys=True).encode()).hexdigest()[:32]
+    return [Call(f"declared:{action}", detail, str(call_id), entry.get("session"), entry.get("cwd"), overrides)]
+
+
 CLAUDE_CODE = Source(
     name="claude-code",
     root=Path.home() / ".claude" / "projects",
     pattern="*.jsonl",
+    extract=_tool_use_calls,
     agent_name=_claude_code_agent,
     timestamp=lambda e: e.get("timestamp"),
     session_meta=lambda _p: {},
+    line_hint='"tool_use"',
 )
 COWORK = Source(
     name="cowork",
     root=Path.home() / "Library" / "Application Support" / "Claude" / "local-agent-mode-sessions",
     pattern="audit.jsonl",
+    extract=_tool_use_calls,
     agent_name=_cowork_agent,
     timestamp=lambda e: e.get("_audit_timestamp") or e.get("timestamp"),
     session_meta=_cowork_meta,
+    line_hint='"tool_use"',
 )
-SOURCES = (CLAUDE_CODE, COWORK)
+CODEX = Source(
+    name="codex",
+    root=Path.home() / ".codex" / "sessions",
+    pattern="*.jsonl",
+    extract=_codex_calls,
+    agent_name=_codex_agent,
+    timestamp=lambda e: e.get("timestamp"),
+    session_meta=_codex_meta,
+    line_hint='"item_completed"',
+)
+INBOX = Source(
+    name="inbox",
+    root=Path.home() / ".agent-receipt" / "inbox",
+    pattern="*.jsonl",
+    extract=_inbox_calls,
+    agent_name=lambda e, _m: str(e.get("agent") or "unknown agent"),
+    timestamp=lambda e: e.get("ts") or e.get("timestamp"),
+    session_meta=lambda _p: {},
+)
+SOURCES = (CLAUDE_CODE, COWORK, CODEX, INBOX)
 
 
 def current_user() -> str:
@@ -136,11 +304,14 @@ def current_user() -> str:
 
 def classify(name: str, tool_input: dict):
     """Return (action_type, target, artifact_link) or None if not a side effect."""
-    if name in FILE_WRITE_TOOLS:
+    if name.startswith("declared:"):
+        action = name.split(":", 1)[1]
+        return (action if action in ACTION_TYPES else "other"), None, None
+    if name in FILE_WRITE_TOOLS or name == "codex:file_delete":
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
         return "file_write", path, (f"file://{path}" if path else None)
     if name in EXECUTE_TOOLS or (name.startswith("mcp__") and name.split("__", 2)[-1] in MCP_SHELL_TOOLS):
-        command = tool_input.get("command") or ""
+        command = _command_text(tool_input.get("command"))
         if is_read_only(command):
             return None
         return "execute", _clip(command), None
@@ -211,82 +382,109 @@ def _cap_strings(obj):
     return obj
 
 
-def _to_epoch(iso: str) -> float:
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+def _to_epoch(iso) -> float | None:
+    if isinstance(iso, (int, float)):
+        return float(iso) / (1000.0 if iso > 1e11 else 1.0)
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
 
 
-def _base_note(source: Source, session_id, reason) -> str:
-    where = "Claude Code transcript" if source.name == "claude-code" else f"{source.name} transcript"
-    note = f"declared in {where}, session {session_id}"
+def _base_note(source_name: str, session_id, reason, declared=False) -> str:
+    if declared:
+        note = f"declared by the agent itself via the receipt inbox, session {session_id}"
+    else:
+        where = "Claude Code transcript" if source_name == "claude-code" else f"{source_name} transcript"
+        note = f"declared in {where}, session {session_id}"
     return f"{note}; reversibility: {reason}" if reason else note
+
+
+def build_action(call: Call, source_name: str, timestamp: float, agent: str, user: str,
+                 path: Path | None, entry: dict | None = None) -> dict | None:
+    """Turn a Call into an `actions` row dict, or None if it is not a side effect."""
+    classified = classify(call.name, call.input)
+    if classified is None:
+        return None
+    action_type, target, artifact_link = classified
+    o = call.overrides
+    action_type = o.get("action_type", action_type)
+    target = _clip(o["target"]) if "target" in o and o["target"] is not None else target
+    artifact_link = o.get("artifact_link", artifact_link)
+    reversible, reason = assess(action_type, call.name, call.input, target, call.cwd)
+    if "reversible" in o:
+        reversible, reason = o["reversible"], o.get("reason") or reason
+    elif o.get("reason"):
+        reason = f"{o['reason']}; {reason}" if reason else o["reason"]
+    entry = entry or {}
+    return {
+        "timestamp": timestamp,
+        "agent": o.get("agent", agent),
+        "user": user,
+        "source": "log",
+        "action_type": action_type,
+        "target": target,
+        "amount": o.get("amount"),
+        "currency": o.get("currency"),
+        "artifact_link": artifact_link,
+        "reversible": reversible,
+        "attribution": "agent",
+        "confidence_note": _base_note(source_name, call.session_id, reason, source_name == "inbox"),
+        "raw_json": json.dumps({
+            "tool": call.name,
+            "input": _cap_strings(call.input),
+            "overrides": _cap_strings(o),
+            "session_id": call.session_id,
+            "cwd": call.cwd,
+            "project": (entry.get("project") if source_name == "inbox" else None),
+            "transcript": str(path) if path else None,
+            "source": source_name,
+            "entrypoint": entry.get("entrypoint"),
+            "sidechain": bool(entry.get("isSidechain")),
+            "version": entry.get("version"),
+        }),
+        "source_ref": call.call_id,
+    }
 
 
 # --- parsing -----------------------------------------------------------------
 
 def parse_lines(path: Path, lines, source: Source = CLAUDE_CODE):
-    """Yield one action dict per side-effect tool call. `lines` is (position, text)."""
+    """Yield one action dict per side effect. `lines` is (position, text)."""
     user = current_user()
     meta = source.session_meta(path)
     for pos, line in lines:
-        # Cheap prefilter: only lines carrying a tool call can matter, and in
-        # multi-GB transcripts most lines are tool results or chat.
-        if '"tool_use"' not in line:
+        # Cheap prefilter: in multi-GB transcripts most lines are tool results or chat.
+        if source.line_hint and source.line_hint not in line:
             continue
         try:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if entry.get("type") != "assistant":
+        if not isinstance(entry, dict):
             continue
-        content = (entry.get("message") or {}).get("content")
-        if not isinstance(content, list):
+        calls = source.extract(entry, meta)
+        if not calls:
             continue
-        timestamp = source.timestamp(entry)
-        if not timestamp:
+        timestamp = _to_epoch(source.timestamp(entry))
+        if timestamp is None:
             continue
-        for idx, block in enumerate(content):
-            if not isinstance(block, dict) or block.get("type") != "tool_use":
+        agent = source.agent_name(entry, meta)
+        project = meta.get("title")
+        for idx, call in enumerate(calls):
+            call.call_id = call.call_id or f"{path.name}:{pos}:{idx}"
+            action = build_action(call, source.name, timestamp, agent, user, path, entry)
+            if action is None:
                 continue
-            name = block.get("name") or ""
-            tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-            classified = classify(name, tool_input)
-            if classified is None:
-                continue
-            action_type, target, artifact_link = classified
-            session_id = entry.get("sessionId") or entry.get("session_id")
-            cwd = entry.get("cwd") or meta.get("cwd")
-            reversible, reason = assess(action_type, name, tool_input, target, cwd)
-            yield {
-                "timestamp": _to_epoch(timestamp),
-                "agent": source.agent_name(entry, meta),
-                "user": user,
-                "source": "log",
-                "action_type": action_type,
-                "target": target,
-                "amount": None,
-                "currency": None,
-                "artifact_link": artifact_link,
-                "reversible": reversible,
-                "attribution": "agent",
-                "confidence_note": _base_note(source, session_id, reason),
-                "raw_json": json.dumps({
-                    "tool": name,
-                    "input": _cap_strings(tool_input),
-                    "session_id": session_id,
-                    "cwd": cwd,
-                    "project": meta.get("title"),
-                    "transcript": str(path),
-                    "source": source.name,
-                    "entrypoint": entry.get("entrypoint"),
-                    "sidechain": bool(entry.get("isSidechain")),
-                    "version": entry.get("version"),
-                }),
-                "source_ref": block.get("id") or f"{path.name}:{pos}:{idx}",
-            }
+            if project:
+                raw = json.loads(action["raw_json"])
+                raw["project"] = project
+                action["raw_json"] = json.dumps(raw)
+            yield action
 
 
 def parse_file(path: Path, source: Source = CLAUDE_CODE):
-    with open(path, encoding="utf-8") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         yield from parse_lines(path, enumerate(f, 1), source)
 
 
@@ -323,7 +521,7 @@ def find_transcripts(root=None, source: Source = CLAUDE_CODE):
     root = Path(root) if root else source.root
     if not root.exists():
         return []
-    return sorted(root.rglob(source.pattern))
+    return sorted(p for p in root.rglob(source.pattern) if p.is_file())
 
 
 INSERT_SQL = """
@@ -367,7 +565,13 @@ def ingest(conn: sqlite3.Connection, paths=None, full: bool = False,
             # Re-reading from the top (new file, or it shrank): old chunks no longer apply.
             conn.execute("DELETE FROM transcript_chunks WHERE path = ?", (str(path),))
         before = conn.total_changes
-        conn.executemany(INSERT_SQL, parse_lines(path, reader, source))
+        try:
+            conn.executemany(INSERT_SQL, parse_lines(path, reader, source))
+        except Exception as exc:  # one bad transcript must not stop the receipt
+            conn.rollback()
+            print(f"[{source.name}] could not parse {path.name}: {exc!r}; will retry next refresh",
+                  file=sys.stderr)
+            continue
         inserted += conn.total_changes - before
         if reader.offset > reader.start:
             conn.execute(
@@ -392,11 +596,10 @@ def reconcile(conn: sqlite3.Connection):
     Rows whose stored input was truncated are left alone: we can't re-judge them.
     Returns (removed, updated)."""
     rows = conn.execute(
-        "SELECT id, raw_json, reversible, confidence_note FROM actions WHERE source = 'log'"
+        "SELECT id, raw_json, reversible, confidence_note, timestamp, agent, user FROM actions WHERE source = 'log'"
     ).fetchall()
-    by_name = {s.name: s for s in SOURCES}
     doomed, updates = [], []
-    for action_id, raw, reversible, note in rows:
+    for action_id, raw, reversible, note, timestamp, agent, user in rows:
         try:
             data = json.loads(raw or "")
         except ValueError:
@@ -404,19 +607,16 @@ def reconcile(conn: sqlite3.Connection):
         tool_input = data.get("input") if isinstance(data.get("input"), dict) else {}
         if "chars total]" in json.dumps(tool_input):
             continue
-        tool = data.get("tool") or ""
-        classified = classify(tool, tool_input)
-        if classified is None:
+        call = Call(data.get("tool") or "", tool_input, None, data.get("session_id"), data.get("cwd"),
+                    data.get("overrides") if isinstance(data.get("overrides"), dict) else {})
+        rebuilt = build_action(call, data.get("source") or "claude-code", timestamp, agent, user, None)
+        if rebuilt is None:
             doomed.append((action_id,))
             continue
-        action_type, target, _ = classified
-        new_rev, reason = assess(action_type, tool, tool_input, target, data.get("cwd"))
-        source = by_name.get(data.get("source"), CLAUDE_CODE)
-        base = _base_note(source, data.get("session_id"), reason)
         rest = (note or "").split(" | ", 1)
-        new_note = base + (" | " + rest[1] if len(rest) > 1 else "")
-        if new_rev != reversible or new_note != note:
-            updates.append((new_rev, new_note, action_id))
+        new_note = rebuilt["confidence_note"] + (" | " + rest[1] if len(rest) > 1 else "")
+        if rebuilt["reversible"] != reversible or new_note != note:
+            updates.append((rebuilt["reversible"], new_note, action_id))
     conn.executemany("DELETE FROM actions WHERE id = ?", doomed)
     conn.executemany("UPDATE actions SET reversible = ?, confidence_note = ? WHERE id = ?", updates)
     conn.execute("UPDATE actions SET user = ? WHERE user IS NULL", (current_user(),))
