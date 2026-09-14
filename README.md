@@ -36,6 +36,9 @@ were not altered); **Print** for a paper statement or a PDF.
   file writes, shell commands, browser actions, posts.
 - `coverage`: when the input monitor was actually running, so the statement
   can say "not looking" instead of "nothing happened".
+- `transcript_chunks`: a SHA-256 of every byte range read from the agents'
+  logs, re-checked every few hours, so the statement can say the logs were
+  not altered after the receipt read them.
 
 ### What it does not see
 Claude Desktop chat (outside the Code tab), email, cards, wallets. The page

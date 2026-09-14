@@ -12,6 +12,7 @@ from export import export_csv
 from queries import ACTION_TYPES, COVERAGE_NOTES, earliest_day, list_days, statement
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, summary_text
+from verify import status_line
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -44,23 +45,25 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         conn = db()
         try:
             data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            integrity = status_line(conn)
         finally:
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
         return render_template(
-            "statement.html", coverage_notes=COVERAGE_NOTES, summary=summary_text(data),
+            "statement.html", coverage_notes=COVERAGE_NOTES, summary=summary_text(data, integrity),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
-            query=request.query_string.decode(), **data)
+            integrity=integrity, query=request.query_string.decode(), **data)
 
     @app.route("/")
     def index():
         conn = db()
         try:
             days = list_days(conn)
+            integrity = status_line(conn)
         finally:
             conn.close()
         return render_template("index.html", days=days, coverage_notes=COVERAGE_NOTES,
-                               today=date.today().isoformat())
+                               integrity=integrity, today=date.today().isoformat())
 
     @app.route("/day/<day_str>")
     def day_page(day_str):

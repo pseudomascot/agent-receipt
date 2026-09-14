@@ -46,6 +46,18 @@ CREATE TABLE IF NOT EXISTS parser_state (
     byte_offset INTEGER NOT NULL
 );
 
+-- SHA-256 of every byte range the parser has consumed, so a later pass can
+-- prove a transcript has not changed since the receipt first read it.
+CREATE TABLE IF NOT EXISTS transcript_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    first_seen REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chunks_path ON transcript_chunks (path, start_offset);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

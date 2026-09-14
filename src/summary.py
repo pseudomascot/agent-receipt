@@ -16,10 +16,11 @@ SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
 
 
 def build_summary(conn: sqlite3.Connection, day: date) -> str:
-    return summary_text(day_statement(conn, day))
+    from verify import status_line
+    return summary_text(day_statement(conn, day), status_line(conn))
 
 
-def summary_text(s: dict) -> str:
+def summary_text(s: dict, integrity: str | None = None) -> str:
     """Plain-text summary of a statement dict (a day or a range)."""
     a = s["by_attribution"]
     lines = [f"Agent Receipt — {s.get('label', s['day'])}"]
@@ -60,6 +61,8 @@ def summary_text(s: dict) -> str:
         lines.append("Unknown: none.")
 
     lines.append("Not covered: " + "; ".join(NOT_COVERED) + ".")
+    if integrity:
+        lines.append(integrity.splitlines()[0])
     return "\n".join(lines) + "\n"
 
 

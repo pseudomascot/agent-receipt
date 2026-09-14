@@ -17,9 +17,11 @@ from log_parser import SOURCES, ingest_all, reconcile
 from statement import HOST, PORT
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, write_summary
+from verify import describe, verify
 
 SRC = Path(__file__).resolve().parent
 REFRESH_SECONDS = 300
+VERIFY_SECONDS = 6 * 3600
 
 
 def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR) -> dict:
@@ -58,6 +60,7 @@ def main() -> None:
     time.sleep(1.5)
     webbrowser.open(f"http://{HOST}:{PORT}/")
 
+    last_verify = 0.0
     try:
         while True:
             if monitor.poll() is not None:
@@ -68,6 +71,13 @@ def main() -> None:
             stamp = time.strftime("%H:%M:%S")
             print(f"[{stamp}] refreshed: {result['new']} new action(s); "
                   f"agent {result['agent']}, human {result['human']}, unknown {result['unknown']}")
+            if time.time() - last_verify > VERIFY_SECONDS:
+                conn = connect()
+                try:
+                    print(f"[{stamp}] {describe(verify(conn))}")
+                finally:
+                    conn.close()
+                last_verify = time.time()
             time.sleep(REFRESH_SECONDS)
     except KeyboardInterrupt:
         print("\nStopping.")

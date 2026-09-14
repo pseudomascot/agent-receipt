@@ -71,5 +71,9 @@
   </tr>
   {% endfor %}
 </table>
+{% if integrity %}
+<div class="note" style="margin-top:10px; white-space: pre-line">{{ integrity }}
+This proves the transcripts were not altered after the receipt read them; it cannot prove they were honest at that moment.</div>
+{% endif %}
 </body>
 </html>

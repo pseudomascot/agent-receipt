@@ -48,9 +48,22 @@ Filled in during session 1 (2026-09-14), on Marc's Mac.
   Cowork — and are classified by the same browser rules.
 - Agent label: `cowork` or `cowork (scheduled task)`. Scheduled tasks run with
   nobody at the keyboard, which is exactly the case the receipt exists for.
-- Not used yet: `_audit_hmac` plus the `audit-key` files could later prove a
-  transcript was not edited after the fact — a stronger "how we know it was the
-  agent" than the log alone.
+- `_audit_hmac` + `.audit-key` (a 51-byte binary key per session, next to
+  `audit.jsonl`): tried to reproduce the signature on 2026-09-14 — HMAC
+  SHA-256/512/SHA3/BLAKE2 over the line with the hmac field removed (compact,
+  sorted, ASCII/UTF-8 variants, with/without the audit fields, timestamp
+  prefixed/suffixed, previous-hmac chaining), keyed by the raw bytes, the
+  stripped bytes, base64/hex decodings, and SHA-256 of the key. Nothing
+  matched. The scheme needs something only the desktop app has. Not pursued
+  further; the receipt keeps its own integrity record instead (see below).
+
+## Log integrity (the receipt's own tamper-evidence)
+- While ingesting, every byte range the parser consumes is hashed
+  (`transcript_chunks`: path, start, end, sha256, first_seen) — no extra I/O.
+- `src/verify.py` re-reads those ranges and compares; the runner does this at
+  start and every 6 hours; the result is shown on every page and in the summary.
+- Claim it supports: "not altered since the receipt first read it on <date>."
+  Claim it does not support: that the log was honest at that moment.
 - Performance: transcripts are streamed line by line and only lines containing
   `"tool_use"` are JSON-parsed; the first pass over 5.9 GB takes minutes,
   afterwards only appended bytes are read.

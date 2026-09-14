@@ -10,8 +10,10 @@ always safe: each tool call's own id is stored as `source_ref` (UNIQUE).
 """
 
 import getpass
+import hashlib
 import json
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +25,7 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "4"
+RULES_VERSION = "5"
 
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
 EXECUTE_TOOLS = {"Bash"}
@@ -271,12 +273,20 @@ def parse_file(path: Path, source: Source = CLAUDE_CODE):
 
 
 class _NewLines:
-    """Streams complete lines appended since `offset`; `.offset` ends past the last one."""
+    """Streams complete lines appended since `offset`; `.offset` ends past the last one.
+
+    Also hashes every byte it yields (`.digest`), so the consumed range can be
+    recorded and re-verified later."""
 
     def __init__(self, path: Path, offset: int):
         size = path.stat().st_size
         self.path = path
-        self.offset = 0 if size < offset else offset
+        self.start = self.offset = 0 if size < offset else offset
+        self._hash = hashlib.sha256()
+
+    @property
+    def digest(self) -> str:
+        return self._hash.hexdigest()
 
     def __iter__(self):
         with open(self.path, "rb") as f:
@@ -287,6 +297,7 @@ class _NewLines:
                     return
                 pos = self.offset
                 self.offset += len(raw)
+                self._hash.update(raw)
                 yield pos, raw.decode("utf-8", errors="replace")
 
 
@@ -316,6 +327,7 @@ def _reset_if_rules_changed(conn: sqlite3.Connection, full: bool) -> None:
     if full or _rules_changed(conn):
         conn.execute("DELETE FROM actions WHERE source = 'log'")
         conn.execute("DELETE FROM parser_state")
+        conn.execute("DELETE FROM transcript_chunks")
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_version', ?)",
                      (RULES_VERSION,))
         conn.commit()
@@ -331,9 +343,17 @@ def ingest(conn: sqlite3.Connection, paths=None, full: bool = False,
     for path in paths:
         row = conn.execute("SELECT byte_offset FROM parser_state WHERE path = ?", (str(path),)).fetchone()
         reader = _NewLines(path, row[0] if row else 0)
+        if reader.start == 0:
+            # Re-reading from the top (new file, or it shrank): old chunks no longer apply.
+            conn.execute("DELETE FROM transcript_chunks WHERE path = ?", (str(path),))
         before = conn.total_changes
         conn.executemany(INSERT_SQL, parse_lines(path, reader, source))
         inserted += conn.total_changes - before
+        if reader.offset > reader.start:
+            conn.execute(
+                "INSERT INTO transcript_chunks (path, start_offset, end_offset, sha256, first_seen) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (str(path), reader.start, reader.offset, reader.digest, time.time()))
         conn.execute("INSERT OR REPLACE INTO parser_state (path, byte_offset) VALUES (?, ?)",
                      (str(path), reader.offset))
         conn.commit()
