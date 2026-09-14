@@ -4,6 +4,13 @@ A local app that produces a daily statement of every side-effect action an AI
 agent took on this machine. A bank statement for what your AI did. Local only;
 nothing leaves the machine. MIT licensed.
 
+Source: https://github.com/pseudomascot/agent-receipt
+
+Why it's open source: it asks to watch your keyboard and mouse. You should be
+able to read every line and confirm it records only *that* a key or click
+happened, never which one — see `src/input_monitor.py` and the schema in
+`src/store.py`.
+
 ## Running it
 1. Double-click **`Agent Receipt.command`** in this folder. A Terminal window
    opens and stays open; the statement page opens in your browser at
