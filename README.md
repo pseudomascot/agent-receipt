@@ -55,6 +55,12 @@ Give the agent its own mailbox and put its IMAP login in a git-ignored
 `send_email` rows and card-issuer alert emails become `purchase` rows; the
 correlator then says agent, human, or unknown for each from the evidence.
 
+### Card spend via Stripe (optional)
+Put a Stripe key in `.env` (`RECEIPT_STRIPE_TEST_KEY=sk_test_…` for the
+sandbox; steps in `docs/STRIPE.md`). Purchases on the agent's own Issuing
+card and charges it collects become rows with amounts, at Stripe's own event
+times. `examples/simulate_card_purchase.py` exercises it with fake money.
+
 ### What it does not see
 Claude Desktop chat (outside the Code tab), Google Antigravity, and — until
 the mailbox is configured — email, cards, and wallets. The page says so on

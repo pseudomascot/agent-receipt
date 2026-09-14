@@ -16,6 +16,7 @@ from alerts import evaluate, notify, notify_new
 from correlator import correlate
 from email_connector import sync_if_configured
 from log_parser import SOURCES, current_user, ingest_all, reconcile
+from stripe_connector import sync_if_configured as stripe_sync_if_configured
 from statement import HOST, PORT
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, write_summary
@@ -34,6 +35,7 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
         removed, updated = reconcile(conn)
         new = ingest_all(conn, sources)
         mail = sync_if_configured(conn, current_user()) if email else None
+        stripe = stripe_sync_if_configured(conn, current_user()) if email else None
         counts = correlate(conn)
         new_alerts = evaluate(conn)
         notified = notify_new(new_alerts, notifier)
@@ -44,6 +46,8 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
               "notified": notified, **counts}
     if mail:
         result["mail"] = mail
+    if stripe:
+        result["stripe"] = stripe
     return result
 
 

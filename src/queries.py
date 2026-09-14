@@ -25,10 +25,11 @@ STATIC_COVERAGE = [
 ]
 
 
-def coverage_notes(email_on: bool | None = None) -> list:
-    if email_on is None:
-        from config import email_configured
-        email_on = email_configured()
+def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None) -> list:
+    if email_on is None or stripe_on is None:
+        from config import email_configured, stripe_configured
+        email_on = email_configured() if email_on is None else email_on
+        stripe_on = stripe_configured() if stripe_on is None else stripe_on
     dynamic = [
         ("Email sent from the agent's mailbox", "covered" if email_on else "not covered",
          "Polled read-only over IMAP from the mailbox in .env." if email_on
@@ -36,13 +37,16 @@ def coverage_notes(email_on: bool | None = None) -> list:
         ("Card charges (issuer alert emails)", "covered" if email_on else "not covered",
          "Recognised alert emails in the agent mailbox become purchases." if email_on
          else "Same mailbox setup; alerts must be routed to it."),
+        ("Card charges (Stripe Issuing) and charges collected via Stripe", "covered" if stripe_on else "not covered",
+         "Polled from the Stripe API with the key in .env, at Stripe's own event times." if stripe_on
+         else "Set RECEIPT_STRIPE_TEST_KEY (or RECEIPT_STRIPE_KEY) in .env (docs/STRIPE.md)."),
         ("Crypto wallet", "not covered", "Planned."),
     ]
     return STATIC_COVERAGE + dynamic
 
 
-def not_covered(email_on: bool | None = None) -> list:
-    return [name for name, status, _ in coverage_notes(email_on) if status == "not covered"]
+def not_covered(email_on: bool | None = None, stripe_on: bool | None = None) -> list:
+    return [name for name, status, _ in coverage_notes(email_on, stripe_on) if status == "not covered"]
 ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
 
 # A leading `cd "<dir>" && ` says where, which the Project column already shows.

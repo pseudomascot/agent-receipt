@@ -47,3 +47,22 @@ def email_settings(env: dict | None = None) -> dict | None:
 
 def email_configured() -> bool:
     return email_settings() is not None
+
+
+def stripe_settings(env: dict | None = None) -> dict | None:
+    """Stripe API settings, or None if not configured. Test keys and live keys both work;
+    the mode is shown in the agent label so a statement never mixes them up silently."""
+    env = env if env is not None else load_env()
+    key = env.get("RECEIPT_STRIPE_TEST_KEY") or env.get("RECEIPT_STRIPE_KEY")
+    if not key:
+        return None
+    mode = "test" if key.startswith("sk_test_") else "live"
+    return {
+        "key": key,
+        "mode": mode,
+        "agent": env.get("RECEIPT_STRIPE_AGENT") or f"stripe card ({mode} mode)",
+    }
+
+
+def stripe_configured() -> bool:
+    return stripe_settings() is not None

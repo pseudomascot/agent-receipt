@@ -31,6 +31,7 @@ def _seed(db_path):
 
 def test_build_summary_text(tmp_path, monkeypatch):
     monkeypatch.setattr("config.email_configured", lambda: False)   # independent of this machine's .env
+    monkeypatch.setattr("config.stripe_configured", lambda: False)
     conn = _seed(tmp_path / "t.db")
     text = build_summary(conn, DAY)
     assert text.splitlines() == [
@@ -45,7 +46,8 @@ def test_build_summary_text(tmp_path, monkeypatch):
         "Unknown: 1 action(s) nobody can be confirmed for — review them.",
         "Needs review: none.",
         "Not covered: Google Antigravity; Claude Desktop chat (not the Code tab); "
-        "Email sent from the agent's mailbox; Card charges (issuer alert emails); Crypto wallet.",
+        "Email sent from the agent's mailbox; Card charges (issuer alert emails); "
+        "Card charges (Stripe Issuing) and charges collected via Stripe; Crypto wallet.",
     ]
     conn.close()
 
