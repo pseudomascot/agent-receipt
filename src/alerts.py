@@ -72,7 +72,8 @@ def _matches(conn: sqlite3.Connection, a: dict):
         if n >= BURST_THRESHOLD:
             yield "irreversible_burst", f"{a['agent']}: {n} irreversible actions in the last hour"
     if a["amount"] is not None and a["amount"] > MONEY_THRESHOLD:
-        yield "money_over_threshold", f"{a['agent']} paid {a['amount']:.2f} {a['currency'] or ''} to {_short(a['target'])}"
+        verb = "paid" if a["action_type"] == "purchase" else "moved"
+        yield "money_over_threshold", f"{a['agent']} {verb} {a['amount']:.2f} {a['currency'] or ''}: {_short(a['target'])}"
     if a["attribution"] == "unknown":
         yield "unknown_attribution", f"nobody can be confirmed for: {_short(a['target'])}"
 

@@ -25,8 +25,15 @@
    ./.venv/bin/python src/stripe_connector.py                           # poll now
    ```
    The first run creates a test cardholder and virtual card. Needs Issuing to
-   be available in test mode (Dashboard → Issuing); if it isn't, the script
-   says so and charges are still recorded.
+   be available in test mode (Dashboard → Issuing → get started); if it isn't,
+   the script says so and charges are still recorded.
+5. Simulate the agent collecting a payment (works without Issuing):
+   ```bash
+   ./.venv/bin/python examples/simulate_charge.py                       # $150 from a test card → money alert
+   ./.venv/bin/python examples/simulate_charge.py 42.10 "Acme LLC" --declare   # attributed to the agent
+   ```
+   The first sync also imports the account's existing test-mode charge
+   history, attributed by evidence (usually `unknown`).
 
 ## Live mode
 `RECEIPT_STRIPE_KEY=sk_live_…` works the same way, read-only: the connector
