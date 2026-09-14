@@ -55,6 +55,27 @@ def request(key: str, method: str, path: str, params: dict | None = None) -> dic
         raise StripeError(exc.code, payload) from None
 
 
+def request_v2(key: str, method: str, path: str, body: dict | None = None,
+               version: str = "2026-08-26.preview") -> dict:
+    """Stripe's v2 API: JSON bodies and a required Stripe-Version header."""
+    data = json.dumps(body or {}).encode() if method == "POST" else None
+    url = API + path
+    if method == "GET" and body:
+        url += "?" + urllib.parse.urlencode(body)
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "Authorization": f"Bearer {key}", "User-Agent": "agent-receipt",
+        "Stripe-Version": version, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read())
+        except ValueError:
+            payload = {}
+        raise StripeError(exc.code, payload) from None
+
+
 def _flatten(params: dict, prefix: str = "") -> dict:
     flat = {}
     for k, v in params.items():

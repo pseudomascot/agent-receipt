@@ -35,6 +35,24 @@
    The first sync also imports the account's existing test-mode charge
    history, attributed by evidence (usually `unknown`).
 
+## Sandboxes with a v2 financial account (learned 2026-09-14)
+Newer sandboxes ("Explore in sandbox" on the Issuing page) fund cards from a
+**v2 financial account** rather than the classic Issuing balance:
+- The sandbox has its **own** secret key (Developers → API keys inside the
+  sandbox); the classic test-mode key returns "not set up to use Issuing".
+- v2 endpoints need `Stripe-Version: <date>.preview` (see `request_v2`).
+- Cards must be created with `financial_account_v2=<fa_test_…>`; the
+  cardholder needs `individual.first_name/last_name`, a `dob`, and
+  `individual.card_issuing.user_terms_acceptance` or Stripe reports
+  `requirements.past_due`.
+- Cards cannot be created while the financial account is `pending`; complete
+  the sandbox's **Setup guide** (top right of the dashboard) to open it.
+- `POST /v1/topups` with `destination_balance=issuing` is rejected on these
+  accounts, and the dashboard's Add funds only offers the refunds/disputes
+  balance; fund the financial account once it is open.
+The simulate script handles all of the above automatically once the account
+is open.
+
 ## Live mode
 `RECEIPT_STRIPE_KEY=sk_live_…` works the same way, read-only: the connector
 only ever lists authorizations and charges. The simulate script refuses live
