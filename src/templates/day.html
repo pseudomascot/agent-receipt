@@ -21,6 +21,9 @@
   {% for type, n in by_type %}<div><b>{{ n }}</b>{{ type }}</div>{% endfor %}
   {% for cur, amt in money.items() %}<div><b>{{ '%.2f'|format(amt) }}</b>{{ cur }} spent</div>{% endfor %}
 </div>
+<div class="note" style="margin-top:8px">Every action here comes from an agent's own log, so it is "agent" by declaration.
+  "Human" and "unknown" only apply to actions seen through sources that don't say who acted (email, card, wallet — v2).
+  A 0 there means "no such source yet", not "no human activity".</div>
 
 <h2>Input monitor on this day</h2>
 {% if monitor_intervals %}

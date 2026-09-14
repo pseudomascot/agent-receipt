@@ -4,6 +4,7 @@ Started by "Agent Receipt.command". Closing that window (or Ctrl+C) stops all
 three. Nothing here talks to the network except the local page on 127.0.0.1.
 """
 
+import signal
 import subprocess
 import sys
 import time
@@ -38,7 +39,15 @@ def _child(script: str) -> subprocess.Popen:
     return subprocess.Popen([sys.executable, str(SRC / script)])
 
 
+def _stop(signum, frame):
+    raise KeyboardInterrupt
+
+
 def main() -> None:
+    # Closing the Terminal window sends SIGHUP; kill sends SIGTERM. Route both
+    # through the same shutdown path so the children never outlive us.
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGHUP, _stop)
     print("Agent Receipt")
     print(f"  database:  {DB_PATH}")
     print(f"  statement: http://{HOST}:{PORT}/")
