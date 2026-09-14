@@ -29,7 +29,8 @@ def _seed(db_path):
     return conn
 
 
-def test_build_summary_text(tmp_path):
+def test_build_summary_text(tmp_path, monkeypatch):
+    monkeypatch.setattr("config.email_configured", lambda: False)   # independent of this machine's .env
     conn = _seed(tmp_path / "t.db")
     text = build_summary(conn, DAY)
     assert text.splitlines() == [

@@ -298,6 +298,29 @@ def test_inbox_source(tmp_path):
     conn.close()
 
 
+def test_declaration_merges_with_observed_action(tmp_path):
+    root = tmp_path / "inbox"
+    root.mkdir()
+    conn = connect(tmp_path / "t.db")
+    # The mailbox connector already recorded the message, attributed by evidence.
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, source, action_type, target, attribution, confidence_note, source_ref) "
+        "VALUES (1789398245, 'mailbox bot', 'email', 'send_email', 'b@x.c', 'human', "
+        "'sent from mailbox bot@x.c | physical input present (5 events in prior 30s), no agent log entry', '<msg_1@x>')")
+    conn.commit()
+    _write_transcript(root / "bot.jsonl", [
+        {"ts": "2026-09-14T15:04:05Z", "agent": "invoice-bot", "action": "send_email", "target": "b@x.c",
+         "id": "<msg_1@x>", "reversible": False, "reason": "left the server"},
+    ])
+    assert ingest_all(conn, (replace(INBOX, root=root),)) == 0                # no new row: merged instead
+    row = conn.execute("SELECT source, agent, attribution, reversible, confidence_note FROM actions").fetchone()
+    assert row[:4] == ("log", "invoice-bot", "agent", 0)
+    assert row[4].startswith("declared by the agent itself via the receipt inbox")
+    assert "also observed via email" in row[4]
+    assert row[4].endswith(" | physical input present (5 events in prior 30s), no agent log entry")
+    conn.close()
+
+
 def test_prefilter_skips_lines_without_tool_use(tmp_path):
     path = tmp_path / "s.jsonl"
     path.write_text('{"type": "assistant", "timestamp": "%s", "message": {"content": [{"type": "text", "text": "hi"}]}}\n' % TS)

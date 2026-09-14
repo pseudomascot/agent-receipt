@@ -564,15 +564,19 @@ def ingest(conn: sqlite3.Connection, paths=None, full: bool = False,
         if reader.start == 0:
             # Re-reading from the top (new file, or it shrank): old chunks no longer apply.
             conn.execute("DELETE FROM transcript_chunks WHERE path = ?", (str(path),))
-        before = conn.total_changes
+        new_rows = 0
         try:
-            conn.executemany(INSERT_SQL, parse_lines(path, reader, source))
+            for action in parse_lines(path, reader, source):
+                if conn.execute(INSERT_SQL, action).rowcount:
+                    new_rows += 1
+                elif source.name == "inbox":
+                    _merge_declaration(conn, action)
         except Exception as exc:  # one bad transcript must not stop the receipt
             conn.rollback()
             print(f"[{source.name}] could not parse {path.name}: {exc!r}; will retry next refresh",
                   file=sys.stderr)
             continue
-        inserted += conn.total_changes - before
+        inserted += new_rows
         if reader.offset > reader.start:
             conn.execute(
                 "INSERT INTO transcript_chunks (path, start_offset, end_offset, sha256, first_seen) "
@@ -582,6 +586,27 @@ def ingest(conn: sqlite3.Connection, paths=None, full: bool = False,
                      (str(path), reader.offset))
         conn.commit()
     return inserted
+
+
+def _merge_declaration(conn: sqlite3.Connection, action: dict) -> None:
+    """A receipt line whose id matches an action already observed elsewhere
+    (e.g. the same message seen in the mailbox) is the same action: the
+    declaration wins on attribution, the observation stays on record."""
+    row = conn.execute(
+        "SELECT id, source, confidence_note FROM actions WHERE source_ref = ? AND source != 'log'",
+        (action["source_ref"],),
+    ).fetchone()
+    if not row:
+        return
+    action_id, observed_source, note = row
+    base = action["confidence_note"] + f"; also observed via {observed_source}"
+    tail = (note or "").split(" | ", 1)
+    new_note = base + (" | " + tail[1] if len(tail) > 1 else "")
+    conn.execute(
+        "UPDATE actions SET source = 'log', agent = ?, attribution = 'agent', confidence_note = ?, "
+        "reversible = COALESCE(?, reversible), raw_json = ? WHERE id = ?",
+        (action["agent"], new_note, action["reversible"], action["raw_json"], action_id),
+    )
 
 
 def ingest_all(conn: sqlite3.Connection, sources=SOURCES, full: bool = False) -> int:

@@ -144,7 +144,9 @@ def _sync_alerts(conn, box, settings, user):
             skipped += 1
             continue
         sender = email.utils.parseaddr(headers.get("From", ""))[1]
-        message_id = (headers.get("Message-ID") or "").strip() or f"imap:{settings['user']}:alert:{uid}"
+        # A charge is a different action from the email that announced it, so it
+        # gets its own id namespace (the same message can also sit in Sent).
+        message_id = "card:" + ((headers.get("Message-ID") or "").strip() or f"imap:{settings['user']}:alert:{uid}")
         card = f", card ending {parsed['last4']}" if parsed["last4"] else ""
         before = conn.total_changes
         conn.execute(INSERT, (

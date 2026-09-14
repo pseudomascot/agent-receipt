@@ -35,7 +35,17 @@ statement can tell you apart.
 ./.venv/bin/python src/email_connector.py                      # poll now instead of waiting 5 minutes
 ```
 
+## Same action, two records
+If the agent also writes a receipt line (docs/RECEIPT_LINE.md) with the
+message id as its `id`, the declaration and the mailbox observation are
+recognised as one action: the row becomes source `log`, attribution `agent`,
+and the note says "also observed via email". A card alert is a different
+action from the email that carried it, so it keeps its own id (`card:<id>`).
+
 ## Limits
+- A card row's time is the alert email's Date header — when the issuer mailed,
+  not when the card was used. The 30-second attribution window is measured
+  against that, so treat card attributions as weaker than email ones.
 - Alert parsing is pattern-based (Chase, Amex, Capital One phrasings and two
   generic forms). An unrecognised alert is simply not a purchase; add its
   phrasing to `src/card_alerts.py`.

@@ -72,7 +72,7 @@ def test_sync_sent_and_alerts_then_attribution(tmp_path):
                         "FROM actions ORDER BY id").fetchall()
     assert rows[0] == ("email", "send_email", "billing@client.com", None, None, "test-agent mailbox", "<m1@example>", 0)
     assert rows[1][2] == "x@y.z, w@y.z"
-    assert rows[2] == ("card", "purchase", "ACME CLOUD SERVICES", 150.0, "USD", "test-agent mailbox", "<m5@example>", 0)
+    assert rows[2] == ("card", "purchase", "ACME CLOUD SERVICES", 150.0, "USD", "test-agent mailbox", "card:<m5@example>", 0)
     assert "card ending 4242" in conn.execute("SELECT confidence_note FROM actions WHERE id = 3").fetchone()[0]
 
     # Second sync: UIDs remembered, nothing new.
@@ -90,7 +90,7 @@ def test_sync_sent_and_alerts_then_attribution(tmp_path):
     attributions = dict(conn.execute("SELECT source_ref, attribution FROM actions WHERE source != 'log'").fetchall())
     assert attributions["<m1@example>"] == "human"      # typing, no agent log
     assert attributions["<m2@example>"] == "agent"      # agent log within 30 s
-    assert attributions["<m5@example>"] == "unknown"    # neither typing nor an agent log near the charge
+    assert attributions["card:<m5@example>"] == "unknown"   # neither typing nor an agent log near the charge
     # The $150 charge trips the money rule; the unknown rows trip the unknown rule.
     rules = {(n["action_id"], n["rule"]) for n in evaluate(conn)}
     assert any(r == "money_over_threshold" for _, r in rules)
