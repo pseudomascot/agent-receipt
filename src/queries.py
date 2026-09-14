@@ -1,7 +1,10 @@
 """Read-side queries shared by the statement page and the daily summary."""
 
+import json
+import re
 import sqlite3
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 # What the receipt can and cannot see. Shown on every page so gaps are never silent.
 COVERAGE_NOTES = [
@@ -16,6 +19,11 @@ COVERAGE_NOTES = [
 ]
 
 NOT_COVERED = [name for name, status, _ in COVERAGE_NOTES if status == "not covered"]
+ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
+
+# A leading `cd "<dir>" && ` says where, which the Project column already shows.
+LEADING_CD = re.compile(r'^cd\s+("[^"]*"|\'[^\']*\'|\S+)\s*&&\s*')
+SHORT_TARGET = 110
 
 
 def day_bounds(day: date):
@@ -24,51 +32,89 @@ def day_bounds(day: date):
     return start, end
 
 
+def _context(raw_json):
+    try:
+        data = json.loads(raw_json or "")
+    except ValueError:
+        return None, None
+    return data.get("cwd"), data.get("session_id")
+
+
+def project_name(cwd) -> str:
+    return Path(cwd).name if cwd else "(unknown project)"
+
+
+def display_target(action_type: str, target: str, cwd) -> str:
+    if not target:
+        return ""
+    if action_type == "file_write" and cwd and target.startswith(cwd.rstrip("/") + "/"):
+        return target[len(cwd.rstrip("/")) + 1:]
+    if action_type == "execute":
+        return LEADING_CD.sub("", target, count=1)
+    return target
+
+
 def list_days(conn: sqlite3.Connection):
     rows = conn.execute(
-        "SELECT date(timestamp, 'unixepoch', 'localtime') AS d, attribution, COUNT(*) "
-        "FROM actions GROUP BY d, attribution ORDER BY d DESC"
+        "SELECT date(timestamp, 'unixepoch', 'localtime') AS d, attribution, raw_json "
+        "FROM actions ORDER BY d DESC"
     ).fetchall()
     days = {}
-    for d, attribution, n in rows:
-        entry = days.setdefault(d, {"day": d, "total": 0, "agent": 0, "human": 0, "unknown": 0})
-        entry[attribution] += n
-        entry["total"] += n
+    for d, attribution, raw in rows:
+        entry = days.setdefault(d, {"day": d, "total": 0, "agent": 0, "human": 0,
+                                    "unknown": 0, "_projects": {}})
+        entry[attribution] += 1
+        entry["total"] += 1
+        name = project_name(_context(raw)[0])
+        entry["_projects"][name] = entry["_projects"].get(name, 0) + 1
+    for entry in days.values():
+        top = sorted(entry.pop("_projects").items(), key=lambda kv: -kv[1])
+        entry["projects"] = [n for n, _ in top[:3]] + (["…"] if len(top) > 3 else [])
     return list(days.values())
 
 
-def day_statement(conn: sqlite3.Connection, day: date):
+def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None = None):
     start, end = day_bounds(day)
     rows = conn.execute(
         "SELECT id, timestamp, agent, action_type, target, amount, currency, artifact_link, "
-        "reversible, attribution, confidence_note "
+        "reversible, attribution, confidence_note, raw_json "
         "FROM actions WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp",
         (start, end),
     ).fetchall()
     actions = []
     for r in rows:
+        cwd, session_id = _context(r[11])
+        target = r[4] or ""
+        shown = display_target(r[3], target, cwd)
         actions.append({
             "id": r[0],
             "time": datetime.fromtimestamp(r[1]).strftime("%H:%M:%S"),
             "agent": r[2],
             "action_type": r[3],
-            "target": r[4] or "",
+            "target": target,
+            "short_target": shown.splitlines()[0][:SHORT_TARGET] if shown else "",
+            "full_target": shown,
+            "is_long": len(shown) > SHORT_TARGET or "\n" in shown,
             "amount": r[5],
             "currency": r[6],
             "artifact_link": r[7],
             "reversible": {None: "not assessed", 0: "no", 1: "yes"}.get(r[8], "not assessed"),
             "attribution": r[9],
             "note": r[10] or "",
+            "project": project_name(cwd),
+            "session_id": session_id,
         })
 
     by_type = {}
     by_attribution = {"agent": 0, "human": 0, "unknown": 0}
+    by_project = {}
     money = {}
     file_targets = {}
     uncovered = 0
     for a in actions:
         by_type[a["action_type"]] = by_type.get(a["action_type"], 0) + 1
         by_attribution[a["attribution"]] += 1
+        by_project[a["project"]] = by_project.get(a["project"], 0) + 1
         if a["amount"] is not None:
             cur = a["currency"] or "?"
             money[cur] = money.get(cur, 0) + a["amount"]
@@ -76,6 +122,13 @@ def day_statement(conn: sqlite3.Connection, day: date):
             file_targets[a["target"]] = file_targets.get(a["target"], 0) + 1
         if "monitor was not running" in a["note"]:
             uncovered += 1
+
+    shown = [a for a in actions if not type_filter or a["action_type"] == type_filter]
+    groups = {}
+    for a in shown:
+        if a["attribution"] != "unknown":
+            groups.setdefault(a["project"], []).append(a)
+    project_groups = sorted(groups.items(), key=lambda kv: -len(kv[1]))
 
     intervals = conn.execute(
         "SELECT started_at, ended_at FROM coverage WHERE source = 'input' "
@@ -92,11 +145,14 @@ def day_statement(conn: sqlite3.Connection, day: date):
 
     return {
         "day": day.isoformat(),
-        "actions": [a for a in actions if a["attribution"] != "unknown"],
-        "unknown": [a for a in actions if a["attribution"] == "unknown"],
+        "type_filter": type_filter,
+        "project_groups": project_groups,
+        "shown_count": len(shown),
+        "unknown": [a for a in shown if a["attribution"] == "unknown"],
         "total": len(actions),
         "by_type": sorted(by_type.items(), key=lambda kv: -kv[1]),
         "by_attribution": by_attribution,
+        "by_project": sorted(by_project.items(), key=lambda kv: -kv[1]),
         "money": money,
         "top_files": sorted(file_targets.items(), key=lambda kv: -kv[1])[:5],
         "uncovered": uncovered,

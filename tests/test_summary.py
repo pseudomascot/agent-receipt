@@ -36,6 +36,7 @@ def test_build_summary_text(tmp_path):
         "Agent Receipt — 2026-09-14",
         "4 actions: 3 agent, 0 human, 1 unknown.",
         "By type: 2 file_write, 1 execute, 1 purchase.",
+        "Projects: (unknown project) (4).",
         "Money: 12.50 USD.",
         "Most-written files: a.txt (2x).",
         "Input monitor: on for about 2 min (10:29–10:31).",

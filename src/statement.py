@@ -6,9 +6,9 @@ Local only. Binds to 127.0.0.1 and never to a public interface.
 from datetime import date
 from pathlib import Path
 
-from flask import Flask, abort, render_template
+from flask import Flask, abort, render_template, request
 
-from queries import COVERAGE_NOTES, day_statement, list_days
+from queries import ACTION_TYPES, COVERAGE_NOTES, day_statement, list_days
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, build_summary
 
@@ -38,9 +38,12 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             day = date.fromisoformat(day_str)
         except ValueError:
             abort(404)
+        type_filter = request.args.get("type")
+        if type_filter not in ACTION_TYPES:
+            type_filter = None
         conn = db()
         try:
-            data = day_statement(conn, day)
+            data = day_statement(conn, day, type_filter)
             summary = build_summary(conn, day)
         finally:
             conn.close()

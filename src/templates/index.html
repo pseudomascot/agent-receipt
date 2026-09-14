@@ -6,7 +6,7 @@
 <div class="note" style="margin-bottom:8px">Human and Unknown stay 0 in v1: every action comes from an agent's own log. They fill in once email, card, or wallet sources are connected (v2).</div>
 {% if days %}
 <table>
-  <tr><th>Day</th><th>Actions</th><th>Agent</th><th>Human</th><th>Unknown</th></tr>
+  <tr><th>Day</th><th>Actions</th><th>Agent</th><th>Human</th><th>Unknown</th><th>Projects</th></tr>
   {% for d in days %}
   <tr>
     <td><a href="/day/{{ d.day }}">{{ d.day }}</a></td>
@@ -14,6 +14,7 @@
     <td>{{ d.agent }}</td>
     <td>{{ d.human }}</td>
     <td>{% if d.unknown %}<span class="pill unknown">{{ d.unknown }}</span>{% else %}0{% endif %}</td>
+    <td class="muted">{{ d.projects|join(', ') }}</td>
   </tr>
   {% endfor %}
 </table>
