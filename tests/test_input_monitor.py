@@ -37,9 +37,9 @@ def test_log_event_rejects_unknown_kind(tmp_path):
     conn.close()
 
 
-def test_db_schema_has_no_extra_columns_for_content():
+def test_input_events_schema_has_no_content_columns():
     # Guard against ever accidentally adding key values, positions, etc.
-    import inspect
-    source = inspect.getsource(init_db)
-    for forbidden in ("key_code", "position", "window", "x_coord", "y_coord"):
-        assert forbidden not in source
+    from store import SCHEMA
+    table_sql = SCHEMA.split("CREATE TABLE IF NOT EXISTS input_events")[1].split(";")[0]
+    for forbidden in ("key_code", "position", "window", "x_coord", "y_coord", "title"):
+        assert forbidden not in table_sql

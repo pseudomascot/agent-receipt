@@ -36,7 +36,9 @@ Marc. He does not code. Treat every session as pair programming with a smart non
 N is configurable. Start at 30 seconds.
 
 ## Data model (start here, change with a reason)
-`actions`: id, timestamp, agent, source (log | input | email | card | wallet), action_type (send_email | create_event | purchase | file_write | post | execute | other), target, amount, currency, artifact_link, reversible, attribution (agent | human | unknown), confidence_note, raw_json
+`actions`: id, timestamp, agent, source (log | input | email | card | wallet), action_type (send_email | create_event | purchase | file_write | post | execute | other), target, amount, currency, artifact_link, reversible, attribution (agent | human | unknown), confidence_note, raw_json, source_ref
+
+`source_ref` (added session 1): the source's own id for the action (e.g. the tool-call id in a Claude Code transcript), UNIQUE, so re-parsing a log never double-counts.
 
 `input_events`: id, timestamp, kind (key | click). Nothing else. Ever.
 

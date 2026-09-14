@@ -10,27 +10,11 @@ import threading
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "agent_receipt.db"
+from store import DB_PATH, connect
 
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
-    # pynput delivers key/click callbacks on its own listener threads, not the
-    # thread that opens this connection, so the default same-thread check
-    # must be disabled. Callers must serialize writes themselves (see `run`,
-    # which uses a lock) since a single sqlite3.Connection is not otherwise
-    # safe for concurrent use from multiple threads.
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS input_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp REAL NOT NULL,
-            kind TEXT NOT NULL CHECK (kind IN ('key', 'click'))
-        )
-        """
-    )
-    conn.commit()
-    return conn
+    return connect(db_path)
 
 
 def log_event(conn: sqlite3.Connection, kind: str) -> None:
