@@ -1,0 +1,13 @@
+#!/bin/zsh
+# Agent Receipt launcher. The app bundle sits inside the project folder.
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$DIR" || exit 1
+fail() { osascript -e "display alert \"Agent Receipt\" message \"$1\"" >/dev/null 2>&1; exit 1; }
+command -v python3 >/dev/null 2>&1 || fail "Python 3 is not installed. Get it from python.org (3.11 or newer), then open Agent Receipt again."
+if [ ! -x .venv/bin/python ]; then
+  python3 -m venv .venv || fail "Could not create the Python environment (.venv)."
+  .venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt || fail "Could not install dependencies. Check your internet connection and open Agent Receipt again."
+  [ -f .env ] || cp .env.example .env
+fi
+.venv/bin/python -c "import rumps" 2>/dev/null || .venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt
+exec .venv/bin/python src/menubar.py

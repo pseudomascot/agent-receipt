@@ -31,6 +31,14 @@ happened, never which one — see `src/input_monitor.py` and the schema in
 The first run reads everything your agents have ever logged (tens of
 thousands of lines take seconds), then refreshes every five minutes.
 
+**Prefer no Terminal window?** Double-click **`Agent Receipt.app`** instead of
+the `.command` (right-click → Open the first time). It runs as a small
+menu-bar icon (🧾) with *Open statement*, *Needs review (N)*, *Status*, and
+*Quit*, and the number next to the icon is how many receipt lines are waiting
+for you. When macOS asks for the Accessibility permission it will name
+"Agent Receipt" rather than Terminal. The app is a thin launcher that must
+stay inside this folder; `make_app.command` rebuilds it.
+
 ## What you'll see
 - **Front page:** days with activity, and a "This machine" table — which
   agents were found, which connectors are configured, whether the monitor is
