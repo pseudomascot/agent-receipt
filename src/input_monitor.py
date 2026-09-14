@@ -27,11 +27,30 @@ def log_event(conn: sqlite3.Connection, kind: str) -> None:
     conn.commit()
 
 
+HEARTBEAT_SECONDS = 5
+
+
+def start_coverage(conn: sqlite3.Connection) -> int:
+    now = time.time()
+    cur = conn.execute(
+        "INSERT INTO coverage (source, started_at, ended_at) VALUES ('input', ?, ?)",
+        (now, now),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def heartbeat(conn: sqlite3.Connection, coverage_id: int) -> None:
+    conn.execute("UPDATE coverage SET ended_at = ? WHERE id = ?", (time.time(), coverage_id))
+    conn.commit()
+
+
 def run(db_path: Path = DB_PATH) -> None:
     from pynput import keyboard, mouse
 
     conn = init_db(db_path)
     write_lock = threading.Lock()
+    coverage_id = start_coverage(conn)
     print(f"Logging key/click timestamps to {db_path}")
     print("No key values, no positions, no content are recorded. Press Ctrl+C to stop.")
 
@@ -51,12 +70,16 @@ def run(db_path: Path = DB_PATH) -> None:
 
     try:
         while True:
-            time.sleep(1)
+            time.sleep(HEARTBEAT_SECONDS)
+            with write_lock:
+                heartbeat(conn, coverage_id)
     except KeyboardInterrupt:
         print("\nStopping.")
     finally:
         key_listener.stop()
         mouse_listener.stop()
+        with write_lock:
+            heartbeat(conn, coverage_id)
         conn.close()
 
 

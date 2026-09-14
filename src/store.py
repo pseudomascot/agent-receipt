@@ -30,7 +30,17 @@ CREATE TABLE IF NOT EXISTS actions (
     source_ref TEXT UNIQUE
 );
 
+-- When each collector was actually running. Gaps here are gaps in the receipt,
+-- and the statement must say so rather than imply "nothing happened".
+CREATE TABLE IF NOT EXISTS coverage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet')),
+    started_at REAL NOT NULL,
+    ended_at REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_actions_timestamp ON actions (timestamp);
+CREATE INDEX IF NOT EXISTS idx_coverage_range ON coverage (source, started_at, ended_at);
 CREATE INDEX IF NOT EXISTS idx_input_events_timestamp ON input_events (timestamp);
 """
 

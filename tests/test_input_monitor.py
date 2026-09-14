@@ -4,7 +4,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from input_monitor import init_db, log_event  # noqa: E402
+from input_monitor import heartbeat, init_db, log_event, start_coverage  # noqa: E402
+
+
+def test_coverage_row_tracks_monitor_lifetime(tmp_path):
+    conn = init_db(tmp_path / "test.db")
+    cid = start_coverage(conn)
+    started, ended = conn.execute("SELECT started_at, ended_at FROM coverage WHERE id = ?", (cid,)).fetchone()
+    assert started == ended
+    heartbeat(conn, cid)
+    _, ended2 = conn.execute("SELECT started_at, ended_at FROM coverage WHERE id = ?", (cid,)).fetchone()
+    assert ended2 >= ended
+    conn.close()
 
 
 def test_init_db_creates_expected_schema(tmp_path):
