@@ -1,6 +1,8 @@
 # Progress
 
 ## Current state
+Noise reduction shipped 2026-09-14 (after v1): `src/shell_classify.py` decides whether a Bash command is read-only — conservative allowlist, quote-aware tokenizer, any redirect/heredoc/subshell/loop/unknown program counts as a side effect. Browser `computer` and `browser_batch` calls are inspected: screenshot/read-only batches are skipped; otherwise the target lists the actions that changed something (e.g. "navigate, left_click, type"). `prune()` applies current rules to rows already in the database on every refresh, so rule changes never leave stale rows. 77 tests. NOTE: after changing classification rules, restart the `.command` — the running loop has the old rules loaded and would re-insert what prune removes.
+
 v1 steps 1-7 done; step 8 (week-long run) started 2026-09-14. Marc chose the double-click `.command` run mode. `src/run.py` starts the input monitor and statement page as child processes, opens the browser, and every 5 minutes runs parse → correlate → summary. `Agent Receipt.command` launches it; closing the Terminal window stops everything. SQLite now uses WAL + a 10s busy timeout since three processes share the file. Verified launched via Terminal: all three processes up, page serving, coverage heartbeat advancing.
 
 Earlier: step 7 done. Step 7 (daily summary, `src/summary.py`) writes a short plain-text statement per day to `summaries/YYYY-MM-DD.txt` (git-ignored) and the same text is shown live at the top of that day's page. Deterministic, from the database only — no AI, no network. Shared read queries moved to `src/queries.py`. Run with `./.venv/bin/python src/summary.py [YYYY-MM-DD]` (default: today).

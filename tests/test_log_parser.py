@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from log_parser import classify, ingest, parse_file  # noqa: E402
+from log_parser import classify, ingest, parse_file, prune  # noqa: E402
 from store import connect  # noqa: E402
 
 TS = "2026-09-14T10:00:00.000Z"
@@ -35,6 +35,7 @@ def _sample_transcript(tmp_path):
         _assistant("Read", {"file_path": "/tmp/a.txt"}, "toolu_read"),
         _assistant("Write", {"file_path": "/tmp/out.txt", "content": "x" * 20000}, "toolu_write"),
         _assistant("Bash", {"command": "git commit -m 'hi'"}, "toolu_bash"),
+        _assistant("Bash", {"command": "ls -la | head"}, "toolu_bash_ls"),
         _assistant("mcp__Claude_Browser__read_page", {}, "toolu_mcp_read"),
         _assistant("mcp__Claude_Browser__navigate", {"url": "https://example.com"}, "toolu_mcp_nav"),
         _assistant("Artifact", {"action": "list"}, "toolu_art_list"),
@@ -49,6 +50,46 @@ def test_classify_skips_reads():
     assert classify("mcp__foo__get_thing", {}) is None
     assert classify("Artifact", {"action": "read", "url": "u"}) is None
     assert classify("mcp__ccd_session__mark_chapter", {"title": "t"}) is None
+    assert classify("Bash", {"command": "ls -la && git status"}) is None
+    assert classify("mcp__Claude_Browser__computer", {"action": "screenshot"}) is None
+    assert classify("mcp__Claude_Browser__browser_batch", {"actions": [
+        {"name": "computer", "input": {"action": "screenshot"}},
+        {"name": "read_page", "input": {}},
+    ]}) is None
+
+
+def test_classify_browser_side_effects():
+    assert classify("mcp__Claude_Browser__computer", {"action": "left_click"}) == ("other", "left_click", None)
+    batch = {"actions": [
+        {"name": "navigate", "input": {"url": "u"}},
+        {"name": "computer", "input": {"action": "screenshot"}},
+        {"name": "computer", "input": {"action": "type", "text": "hi"}},
+        {"name": "computer", "input": {"action": "type", "text": "again"}},
+    ]}
+    assert classify("mcp__claude-in-chrome__browser_batch", batch) == ("other", "navigate, type", None)
+
+
+def test_prune_removes_rows_under_new_rules(tmp_path):
+    conn = connect(tmp_path / "t.db")
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
+        "VALUES (1, 'a', 'log', 'execute', 'agent', ?, 'r1')",
+        (json.dumps({"tool": "Bash", "input": {"command": "ls"}}),),
+    )
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
+        "VALUES (2, 'a', 'log', 'execute', 'agent', ?, 'r2')",
+        (json.dumps({"tool": "Bash", "input": {"command": "rm x"}}),),
+    )
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, source, action_type, attribution, raw_json, source_ref) "
+        "VALUES (3, 'a', 'log', 'execute', 'agent', ?, 'r3')",
+        (json.dumps({"tool": "Bash", "input": {"command": "ls… [20000 chars total]"}}),),
+    )
+    conn.commit()
+    assert prune(conn) == 1
+    assert [r[0] for r in conn.execute("SELECT source_ref FROM actions ORDER BY id")] == ["r2", "r3"]
+    conn.close()
 
 
 def test_classify_side_effects():

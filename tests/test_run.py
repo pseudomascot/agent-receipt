@@ -26,7 +26,7 @@ def test_refresh_parses_correlates_and_writes_summary(tmp_path):
     out = tmp_path / "summaries"
 
     result = refresh(db, tmp_path / "projects", out)
-    assert result == {"new": 1, "agent": 1, "human": 0, "unknown": 0}
+    assert result == {"new": 1, "pruned": 0, "agent": 1, "human": 0, "unknown": 0}
     assert (out / f"{date.today().isoformat()}.txt").read_text().startswith("Agent Receipt")
 
     conn = connect(db)

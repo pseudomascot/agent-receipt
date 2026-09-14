@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from correlator import correlate
-from log_parser import find_transcripts, ingest
+from log_parser import find_transcripts, ingest, prune
 from statement import HOST, PORT
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, write_summary
@@ -27,12 +27,13 @@ def refresh(db_path=DB_PATH, transcripts_root=None, summaries_dir=SUMMARIES_DIR)
     conn = connect(db_path)
     try:
         paths = find_transcripts(transcripts_root) if transcripts_root else find_transcripts()
+        pruned = prune(conn)
         new = ingest(conn, paths)
         counts = correlate(conn)
         write_summary(conn, date.today(), summaries_dir)
     finally:
         conn.close()
-    return {"new": new, **counts}
+    return {"new": new, "pruned": pruned, **counts}
 
 
 def _child(script: str) -> subprocess.Popen:
