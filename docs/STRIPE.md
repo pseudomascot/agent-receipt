@@ -45,8 +45,14 @@ Newer sandboxes ("Explore in sandbox" on the Issuing page) fund cards from a
   cardholder needs `individual.first_name/last_name`, a `dob`, and
   `individual.card_issuing.user_terms_acceptance` or Stripe reports
   `requirements.past_due`.
-- Cards cannot be created while the financial account is `pending`; complete
-  the sandbox's **Setup guide** (top right of the dashboard) to open it.
+- Cards cannot be created while the financial account is `pending`. On an
+  account that has not completed live onboarding, the sandbox's financial
+  account stays pending: the Setup guide's "Create your Stripe profile" step
+  says "To continue, switch to live mode — this feature can't be set up in
+  your sandbox account." In other words, Stripe gates an agent's own card
+  behind full business verification even for testing. The own-card path is
+  implemented and verified up to that gate; run it on an Issuing-activated
+  account.
 - `POST /v1/topups` with `destination_balance=issuing` is rejected on these
   accounts, and the dashboard's Add funds only offers the refunds/disputes
   balance; fund the financial account once it is open.
