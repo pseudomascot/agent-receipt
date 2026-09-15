@@ -42,11 +42,11 @@
 <section class="card" data-section="totals">
 <h2>Totals</h2>
 <div class="tiles">
-  <div class="tile"><b>{{ total }}</b><span class="label">actions</span></div>
-  <div class="tile"><b>{{ by_attribution.agent }}</b><span class="pill agent">by an agent</span></div>
-  <div class="tile"><b>{{ by_attribution.human }}</b><span class="pill human">by a person</span></div>
-  <div class="tile"><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unexplained</span></div>
-  {% for type, n in by_type %}<div class="tile"><b>{{ n }}</b><span class="label">{{ type_label(type) }}</span></div>{% endfor %}
+  <a href="#actions" class="tile" data-tile-all title="Show every category"><b>{{ total }}</b><span class="label">actions</span></a>
+  <a href="#actions" class="tile" data-tile-section="actions"><b>{{ by_attribution.agent }}</b><span class="pill agent">by an agent</span></a>
+  <a href="#actions" class="tile" data-tile-section="actions"><b>{{ by_attribution.human }}</b><span class="pill human">by a person</span></a>
+  <a href="#unknown" class="tile" data-tile-section="unknown"><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unexplained</span></a>
+  {% for type, n in by_type %}<a href="#actions" class="tile" data-tile-type="{{ type }}" title="Show only {{ type_label(type)|lower }}"><b>{{ n }}</b><span class="label">{{ type_label(type) }}</span></a>{% endfor %}
   {% for cur, amt in money.items() %}<div class="tile"><b>{{ '%.2f'|format(amt) }}</b><span class="label">{{ cur }} moved</span></div>{% endfor %}
 </div>
 <div class="note" style="margin-top:10px"><b>By an agent</b> = the agent's own log says it did it. <b>By a person</b> = someone was typing or clicking just before it and no agent claims it (only possible for things seen through a mailbox or card). <b>Unexplained</b> = neither.</div>
@@ -142,7 +142,7 @@
 </section>
 
 <section class="card" data-section="unknown">
-<h2>Unexplained</h2>
+<h2 id="unknown">Unexplained</h2>
 {% if unknown %}
 <div class="note">Actions where neither an agent's log nor keyboard activity says who did it.</div>
 <div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>

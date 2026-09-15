@@ -129,6 +129,7 @@ def test_day_page_type_filter(tmp_path):
     assert "Filtered: Commands run" in html and "2 of 4 actions" in html
     assert 'id="actions"' in html
     assert '<b>4</b><span class="label">actions</span>' in html       # totals stay for the whole day
+    assert 'data-tile-type="execute"' in html and 'data-tile-all' in html   # tiles are shortcuts
     html = client.get(f"/day/{DAY}?type=bogus").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html                               # bad filter ignored
 

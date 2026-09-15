@@ -65,6 +65,8 @@
   .tile { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fbfaf8; }
   .tile b { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 4px; }
   .tile span.label { font-size: 13px; color: var(--muted); }
+  a.tile { color: var(--text); }
+  a.tile:hover { text-decoration: none; border-color: var(--accent); background: var(--accent-soft); }
 
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
@@ -228,6 +230,26 @@ This proves the logs were not altered after the receipt read them; it cannot pro
     link.addEventListener("click", function (e) {
       e.preventDefault(); hiddenTypes = []; store.set("ar.hiddenTypes", hiddenTypes); applyTypes();
     });
+  });
+  // Totals tiles act as shortcuts: a category tile shows only that category, the
+  // actions tile shows everything, attribution tiles jump to their section.
+  function reveal(name) {
+    var i = hiddenSections.indexOf(name);
+    if (i >= 0) { hiddenSections.splice(i, 1); store.set("ar.hiddenSections", hiddenSections); applySections(); }
+  }
+  var allTypes = Array.prototype.map.call(document.querySelectorAll("[data-toggle-type]"), function (c) { return c.getAttribute("data-toggle-type"); });
+  document.querySelectorAll("[data-tile-type]").forEach(function (tile) {
+    tile.addEventListener("click", function () {
+      var t = tile.getAttribute("data-tile-type");
+      hiddenTypes = allTypes.filter(function (x) { return x !== t; });
+      store.set("ar.hiddenTypes", hiddenTypes); applyTypes(); reveal("actions");
+    });
+  });
+  document.querySelectorAll("[data-tile-all]").forEach(function (tile) {
+    tile.addEventListener("click", function () { hiddenTypes = []; store.set("ar.hiddenTypes", hiddenTypes); applyTypes(); reveal("actions"); });
+  });
+  document.querySelectorAll("[data-tile-section]").forEach(function (tile) {
+    tile.addEventListener("click", function () { reveal(tile.getAttribute("data-tile-section")); });
   });
   document.querySelectorAll("[data-toggle-type]").forEach(function (chip) {
     chip.addEventListener("click", function () {
