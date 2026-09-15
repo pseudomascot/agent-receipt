@@ -53,7 +53,7 @@
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 18px 20px; margin: 0 0 16px; }
+    padding: 18px 20px; margin: 0 0 16px; overflow-x: auto; }
   section.card > h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
   section.card h3 { font-size: 15px; font-weight: 600; margin: 18px 0 8px; display: flex; align-items: baseline; gap: 8px; }
   section.card h3 .muted { font-weight: 400; }
@@ -71,7 +71,7 @@
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
     padding: 6px 10px; border-bottom: 1px solid var(--line); }
-  td { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  td { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; overflow-wrap: anywhere; }
   tr:last-child td { border-bottom: 0; }
   tbody tr:hover td { background: #fbfaf8; }
   td.time { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
