@@ -44,17 +44,16 @@ def summary_text(s: dict, integrity: str | None = None, needs_review: int | None
             lines.append("Most-written files: " + "; ".join(
                 f"{Path(t).name} ({n}x)" if n > 1 else Path(t).name for t, n in s["top_files"]) + ".")
 
-    if s["monitor_intervals"] and s.get("single_day", True):
-        spans = ", ".join(f"{b}–{e}" for b, e in s["monitor_intervals"])
-        lines.append(f"Input monitor: on for about {s['monitor_minutes']} min ({spans}).")
-    elif s["monitor_intervals"]:
-        lines.append(f"Input monitor: on for about {s['monitor_minutes']} min across "
-                     f"{len(s['monitor_intervals'])} session(s).")
+    spans = s["monitor_intervals"]
+    if spans and s.get("single_day", True):
+        when = f"{spans[0][0]}–{spans[0][1]}" if len(spans) == 1 else f"{spans[0][0]}–{spans[-1][1]} with {len(spans) - 1} break(s)"
+        lines.append(f"Keyboard watch: about {s.get('monitor_text', str(s['monitor_minutes']) + ' min')} ({when}).")
+    elif spans:
+        lines.append(f"Keyboard watch: about {s.get('monitor_text', str(s['monitor_minutes']) + ' min')} across {len(spans)} stretch(es).")
     else:
-        lines.append("Input monitor: off all day." if s.get("single_day", True)
-                     else "Input monitor: off for the whole range.")
+        lines.append("Keyboard watch: off" + (" all day." if s.get("single_day", True) else " for the whole range."))
     if s["total"]:
-        lines.append(f"{s['uncovered']} of {s['total']} actions happened while the monitor was off.")
+        lines.append(f"{s['uncovered']} of {s['total']} actions happened while it wasn't watching.")
 
     if s["unknown"]:
         lines.append(f"Unknown: {len(s['unknown'])} action(s) nobody can be confirmed for — review them.")

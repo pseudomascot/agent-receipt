@@ -56,6 +56,28 @@ LEADING_CD = re.compile(r'^cd\s+("[^"]*"|\'[^\']*\'|\S+)\s*&&\s*')
 SHORT_TARGET = 110
 
 
+MERGE_GAP_SECONDS = 120
+
+
+def merge_intervals(intervals, gap: float = MERGE_GAP_SECONDS):
+    """Join (start, end) pairs that overlap or sit within `gap` seconds of each other."""
+    merged = []
+    for s, e in sorted(intervals):
+        if merged and s <= merged[-1][1] + gap:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    return merged
+
+
+def duration_text(seconds: float) -> str:
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return f"{minutes} minute{'' if minutes == 1 else 's'}"
+    hours, rem = divmod(minutes, 60)
+    return f"{hours} hour{'' if hours == 1 else 's'}" + (f" {rem} min" if rem else "")
+
+
 def day_bounds(day: date):
     start = datetime(day.year, day.month, day.day).timestamp()
     end = (datetime(day.year, day.month, day.day) + timedelta(days=1)).timestamp()
@@ -217,13 +239,10 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "AND ended_at >= ? AND started_at < ? ORDER BY started_at",
         (start, end),
     ).fetchall()
-    monitor_intervals = []
-    covered_seconds = 0.0
-    for s, e in intervals:
-        s, e = max(s, start), min(e, end)
-        covered_seconds += e - s
-        monitor_intervals.append((datetime.fromtimestamp(s).strftime("%H:%M"),
-                                  datetime.fromtimestamp(e).strftime("%H:%M")))
+    clipped = [(max(s, start), min(e, end)) for s, e in intervals]
+    covered_seconds = sum(e - s for s, e in merge_intervals(clipped, 0))
+    monitor_intervals = [(datetime.fromtimestamp(s).strftime("%H:%M"), datetime.fromtimestamp(e).strftime("%H:%M"))
+                         for s, e in merge_intervals(clipped)]
 
     days_in_range = (end_day - start_day).days + 1
     return {
@@ -252,6 +271,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "uncovered": uncovered,
         "monitor_intervals": monitor_intervals,
         "monitor_minutes": round(covered_seconds / 60),
+        "monitor_text": duration_text(covered_seconds),
         "prev_day": (start_day - timedelta(days=1)).isoformat(),
         "next_day": (start_day + timedelta(days=1)).isoformat(),
     }

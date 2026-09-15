@@ -34,9 +34,7 @@
   <div><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unknown</span></div>
   {% for cur, amt in money.items() %}<div><b>{{ '%.2f'|format(amt) }}</b>{{ cur }} spent</div>{% endfor %}
 </div>
-<div class="note" style="margin-top:8px">Every action here comes from an agent's own log, so it is "agent" by declaration.
-  "Human" and "unknown" only apply to actions seen through sources that don't say who acted (email, card, wallet — v2).
-  A 0 there means "no such source yet", not "no human activity".</div>
+<div class="note" style="margin-top:8px"><b>agent</b> = the agent's own log says it did it. <b>human</b> = a person was typing or clicking just before it and no agent claims it (only possible for things seen through a mailbox or card, not from agent logs). <b>unknown</b> = neither.</div>
 
 {% if not single_day and by_day %}
 <h2>By day</h2>
@@ -46,14 +44,15 @@
 </table>
 {% endif %}
 
-<h2>Input monitor {% if single_day %}on this day{% else %}in this range{% endif %}</h2>
+<h2>Was anyone at the keyboard?</h2>
 {% if monitor_intervals %}
-<div class="note">Running for about {{ monitor_minutes }} minute(s)
-  {% if single_day %}: {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}across {{ monitor_intervals|length }} session(s){% endif %}.
-  Outside these windows, "no physical input" cannot be distinguished from "not looking".
-  {{ uncovered }} of {{ total }} actions happened while it was off.</div>
+<div class="note">Agent Receipt was watching the keyboard and mouse for about <b>{{ monitor_text }}</b>
+  {% if single_day %}({% if monitor_intervals|length == 1 %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[0][1] }}{% else %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[-1][1] }}, with {{ monitor_intervals|length - 1 }} break{{ '' if monitor_intervals|length == 2 else 's' }}{% endif %}){% else %}across {{ monitor_intervals|length }} stretch{{ '' if monitor_intervals|length == 1 else 'es' }}{% endif %}.
+  {% if uncovered %}<b>{{ uncovered }} of {{ total }}</b> actions happened while it wasn't watching — for those, it can't say whether a person was present.{% else %}It was watching for every action listed.{% endif %}
+  {% if single_day and monitor_intervals|length > 1 %}<details class="screen-only" style="display:inline"><summary style="display:inline;cursor:pointer;color:#1d4ed8">show times</summary>
+  {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}</details>{% endif %}</div>
 {% else %}
-<div class="note">Not running at any point {% if single_day %}this day{% else %}in this range{% endif %}. Agent-log actions are still certain; human-vs-unknown cannot be judged.</div>
+<div class="note">Agent Receipt wasn't watching the keyboard and mouse {% if single_day %}on this day{% else %}in this range{% endif %}, so it can't say whether a person was present for any action. What the agents did is still certain — that comes from their own logs.</div>
 {% endif %}
 
 <h2 id="actions">Actions</h2>

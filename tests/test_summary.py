@@ -41,8 +41,8 @@ def test_build_summary_text(tmp_path, monkeypatch):
         "Projects: (unknown project) (4).",
         "Money: 12.50 USD.",
         "Most-written files: a.txt (2x).",
-        "Input monitor: on for about 2 min (10:29–10:31).",
-        "2 of 4 actions happened while the monitor was off.",
+        "Keyboard watch: about 2 minutes (10:29–10:31).",
+        "2 of 4 actions happened while it wasn't watching.",
         "Unknown: 1 action(s) nobody can be confirmed for — review them.",
         "Needs review: none.",
         "Not covered: Google Antigravity; Claude Desktop chat (not the Code tab); "
@@ -56,7 +56,7 @@ def test_build_summary_empty_day(tmp_path):
     conn = connect(tmp_path / "t.db")
     text = build_summary(conn, date(2020, 1, 1))
     assert "No agent actions recorded." in text
-    assert "Input monitor: off all day." in text
+    assert "Keyboard watch: off all day." in text
     assert "Unknown: none." in text
     conn.close()
 
@@ -77,7 +77,7 @@ def test_day_page_shows_summary_and_saved_state(tmp_path):
     html = client.get("/day/2026-09-14").get_data(as_text=True)
     assert "4 actions: 3 agent, 0 human, 1 unknown." in html
     assert "Not yet saved to a file" in html
-    assert "2 of 4 actions happened while it was off" in html
+    assert "<b>2 of 4</b> actions happened while it wasn't watching" in html
     write_summary(conn, DAY, out)
     html = client.get("/day/2026-09-14").get_data(as_text=True)
     assert "Saved to summaries/2026-09-14.txt" in html

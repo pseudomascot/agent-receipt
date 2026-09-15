@@ -63,6 +63,14 @@ def test_agent_and_user_filters_appear_only_with_variety(tmp_path):
     assert "git commit -m hi" in html and "deploy.sh" not in html and "src/&lt;script&gt;" not in html
 
 
+def test_merge_intervals_and_duration_text():
+    from queries import duration_text, merge_intervals
+    assert merge_intervals([(0, 100), (130, 200), (1000, 1100), (1050, 1300)]) == [(0, 200), (1000, 1300)]
+    assert merge_intervals([(0, 100), (130, 200)], gap=0) == [(0, 100), (130, 200)]
+    assert duration_text(90) == "2 minutes" and duration_text(60) == "1 minute"
+    assert duration_text(3600) == "1 hour" and duration_text(43680) == "12 hours 8 min"
+
+
 def test_display_target():
     assert display_target("file_write", "/Users/marc/proj-a/src/x.py", "/Users/marc/proj-a") == "src/x.py"
     assert display_target("file_write", "/etc/hosts", "/Users/marc/proj-a") == "/etc/hosts"
@@ -96,8 +104,9 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     assert "git keeps history" in html                               # reversibility reason shown
     assert "https://example.com" in html                             # Unknown section
     assert "yesterday.html" not in html
-    assert "about 20 minute(s)" in html
+    assert "about <b>20 minutes</b>" in html
     assert "10:20&ndash;10:40" in html
+    assert "It was watching for every action listed." in html
 
 
 def test_actions_are_newest_first(tmp_path):
@@ -191,7 +200,7 @@ def test_day_page_with_no_data(tmp_path):
     client = create_app(db).test_client()
     resp = client.get("/day/2020-01-01")
     assert resp.status_code == 200
-    assert "Not running at any point this day" in resp.get_data(as_text=True)
+    assert "wasn't watching the keyboard and mouse on this day" in resp.get_data(as_text=True)
 
 
 def test_bad_day_is_404(tmp_path):
