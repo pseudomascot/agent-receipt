@@ -16,7 +16,7 @@ suspended, unsuspended or terminated in one call. That is exactly the shape
 - **Stop**: suspend / unsuspend / terminate the fund (src/stop.py).
 
 Endpoints verified against Ramp's OpenAPI spec on 2026-09-15 (docs/RAMP.md):
-POST /developer/v1/token (HTTP Basic client_id:client_secret, JSON body,
+POST /developer/v1/token (HTTP Basic client_id:client_secret, form-encoded body,
 grant_type=client_credentials), GET/POST /developer/v1/funds,
 POST/DELETE /developer/v1/funds/{id}/suspension, DELETE /developer/v1/funds/{id},
 GET /developer/v1/transactions (from_date, page_size, page.next),
@@ -75,9 +75,11 @@ def token(settings: dict, http=_http) -> str:
     if cached and cached[1] > time.time() + 60:
         return cached[0]
     basic = base64.b64encode(f"{settings['client_id']}:{settings['client_secret']}".encode()).decode()
-    body = json.dumps({"grant_type": "client_credentials", "scope": settings["scopes"]}).encode()
+    # Ramp's token endpoint wants the OAuth-standard form encoding (confirmed live 2026-09-15:
+    # JSON gets "400: Expected content type application/x-www-form-urlencoded").
+    body = urllib.parse.urlencode({"grant_type": "client_credentials", "scope": settings["scopes"]}).encode()
     data = http(f"{settings['api']}/developer/v1/token", "POST",
-                {"Authorization": f"Basic {basic}", "Content-Type": "application/json"}, body)
+                {"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"}, body)
     access = data["access_token"]
     _tokens[settings["client_id"]] = (access, time.time() + int(data.get("expires_in") or 3600))
     return access

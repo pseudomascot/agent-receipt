@@ -20,7 +20,7 @@ Verified against Ramp's own OpenAPI spec on 2026-09-15 (the spec is at
 
 | What | Endpoint |
 |---|---|
-| Token | `POST /developer/v1/token` — HTTP Basic `client_id:client_secret`, JSON body `{"grant_type":"client_credentials","scope":"…"}` |
+| Token | `POST /developer/v1/token` — HTTP Basic `client_id:client_secret`, **form-encoded** body `grant_type=client_credentials&scope=…` (JSON is rejected — confirmed live) |
 | Issue a fund | `POST /developer/v1/funds` (`user_id`, `display_name`, `spending_restrictions.limit{amount (cents), currency_code}`, `interval`, `permitted_spend_types`) — the response lists the card(s) with `last_four` |
 | Suspend / unsuspend | `POST` / `DELETE /developer/v1/funds/{id}/suspension` |
 | Terminate | `DELETE /developer/v1/funds/{id}` |
@@ -75,10 +75,9 @@ minutes it appears on the receipt.
 - **Money page / bookkeeping CSV** include Ramp purchases like any other.
 
 ## Honest limits
-- **Not live-proven yet.** Built against the spec and unit-tested with fakes;
-  the first real sandbox call will tell us if Ramp's token endpoint wants the
-  body form-encoded rather than JSON (one line to flip in
-  `ramp_connector.token`) and what a fund response looks like in practice.
+- **Live status:** the token endpoint and user/fund listing are proven against
+  the sandbox (2026-09-15; the token body had to be form-encoded, as suspected).
+  Fund creation, suspension and transaction sync are next to prove.
 - **Ramp cards belong to a user.** All agent funds hang off the one Ramp user
   in `RECEIPT_RAMP_USER_ID`. Identity lives in the *fund*, which is what
   transactions carry, so this is fine for attribution — but Ramp's own UI will

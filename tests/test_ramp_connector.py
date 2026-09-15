@@ -26,7 +26,11 @@ def test_settings_default_to_sandbox():
 def test_token_and_api_use_basic_auth_json_and_bearer():
     calls = []
     def http(url, method, headers, data):
-        calls.append((url, method, headers, json.loads(data) if data else None))
+        from urllib.parse import parse_qs
+        parsed = None
+        if data:
+            parsed = json.loads(data) if headers.get("Content-Type") == "application/json" else {k: v[0] for k, v in parse_qs(data.decode()).items()}
+        calls.append((url, method, headers, parsed))
         if url.endswith("/token"):
             return {"access_token": "tok-1", "expires_in": 3600}
         return {"data": [{"id": "x"}], "page": {"next": None}}
@@ -36,7 +40,7 @@ def test_token_and_api_use_basic_auth_json_and_bearer():
     assert out["data"] == [{"id": "x"}]
     tok_url, tok_method, tok_headers, tok_body = calls[0]
     assert tok_url == "https://demo-api.ramp.com/developer/v1/token" and tok_method == "POST"
-    assert tok_headers["Authorization"].startswith("Basic ") and tok_headers["Content-Type"] == "application/json"
+    assert tok_headers["Authorization"].startswith("Basic ") and tok_headers["Content-Type"] == "application/x-www-form-urlencoded"
     assert tok_body == {"grant_type": "client_credentials", "scope": s["scopes"]}
     url, method, headers, body = calls[1]
     assert url == "https://demo-api.ramp.com/developer/v1/funds?page_size=100" and headers["Authorization"] == "Bearer tok-1"
