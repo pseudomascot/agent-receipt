@@ -103,7 +103,7 @@
       <pre class="full print-only">{{ a.full_target }}</pre>
       {% else %}{{ a.full_target }}{% endif %}
       </div>
-      {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{{ a.artifact_link }}</div>{% endif %}
+      {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{% if a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a> <span class="raw" style="display:inline">{{ a.artifact_link[:80] }}{% if a.artifact_link|length > 80 %}…{% endif %}</span>{% else %}{{ a.artifact_link }}{% endif %}</div>{% endif %}
       {% if a.id in alerted %}<div style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> <span class="note">{{ alerted[a.id]|join(', ') }}</span></div>{% endif %}
     </td>
     <td><span class="pill type">{{ type_label(a.action_type) }}</span></td>
@@ -151,7 +151,8 @@
   {% for a in unknown %}
   <tr data-type="{{ a.action_type }}">
     <td class="time">{{ a.time }}</td>
-    <td><div>{{ a.what }}</div><div class="raw">{{ a.full_target }}</div></td>
+    <td><div>{{ a.what }}</div><div class="raw">{{ a.full_target }}</div>
+      {% if a.artifact_link and a.artifact_link.startswith('http') %}<div class="note"><a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a></div>{% endif %}</td>
     <td class="note">{{ a.note.split(' | ')[-1] }}</td>
   </tr>
   {% endfor %}

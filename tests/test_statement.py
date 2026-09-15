@@ -185,6 +185,19 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
     assert "Nothing needs review</a>" in html and 'class="flagged"' not in html
 
 
+def test_web_links_are_clickable(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    conn = connect(db)
+    conn.execute("UPDATE actions SET artifact_link = 'https://calendar.google.com/event?eid=abc' WHERE target = 'git commit -m hi'")
+    conn.execute("UPDATE actions SET artifact_link = 'file:///tmp/x' WHERE target = 'https://example.com'")
+    conn.commit()
+    conn.close()
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    assert '<a href="https://calendar.google.com/event?eid=abc" target="_blank" rel="noopener">Open ↗</a>' in html
+    assert 'href="file:///tmp/x"' not in html
+
+
 def test_print_markup_present(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)
