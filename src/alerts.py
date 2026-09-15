@@ -12,6 +12,8 @@ import sys
 import time
 from datetime import datetime
 
+from describe import describe
+
 BURST_WINDOW_SECONDS = 3600
 BURST_THRESHOLD = 5
 MONEY_THRESHOLD = 100.0
@@ -60,9 +62,18 @@ def evaluate(conn: sqlite3.Connection) -> list[dict]:
     return new
 
 
+def _what(a: dict) -> str:
+    try:
+        raw = json.loads(a.get("raw_json") or "{}")
+    except ValueError:
+        raw = {}
+    return describe(a["action_type"], a["target"], str(raw.get("tool") or ""), raw.get("cwd"),
+                    {"amount": a.get("amount"), "currency": a.get("currency")})
+
+
 def _matches(conn: sqlite3.Connection, a: dict):
     if a["reversible"] == 0 and _unattended(a):
-        yield "unattended_irreversible", f"{a['agent']} did something irreversible: {_short(a['target'])}"
+        yield "unattended_irreversible", f"{a['agent']}, unattended: {_short(_what(a))}"
     if a["reversible"] == 0:
         n = conn.execute(
             "SELECT COUNT(*) FROM actions WHERE agent = ? AND reversible = 0 "
@@ -72,10 +83,9 @@ def _matches(conn: sqlite3.Connection, a: dict):
         if n >= BURST_THRESHOLD:
             yield "irreversible_burst", f"{a['agent']}: {n} irreversible actions in the last hour"
     if a["amount"] is not None and a["amount"] > MONEY_THRESHOLD:
-        verb = "paid" if a["action_type"] == "purchase" else "moved"
-        yield "money_over_threshold", f"{a['agent']} {verb} {a['amount']:.2f} {a['currency'] or ''}: {_short(a['target'])}"
+        yield "money_over_threshold", f"{a['agent']}: {_short(_what(a))}"
     if a["attribution"] == "unknown":
-        yield "unknown_attribution", f"nobody can be confirmed for: {_short(a['target'])}"
+        yield "unknown_attribution", f"nobody can be confirmed for: {_short(_what(a))}"
 
 
 def _short(text, n=80) -> str:
@@ -86,22 +96,24 @@ def _short(text, n=80) -> str:
 def unseen(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT al.id, al.rule, al.message, al.created_at, ac.id, ac.timestamp, ac.agent, "
-        "ac.action_type, ac.target, ac.confidence_note, ac.raw_json "
+        "ac.action_type, ac.target, ac.confidence_note, ac.raw_json, ac.amount, ac.currency "
         "FROM alerts al JOIN actions ac ON ac.id = al.action_id "
         "WHERE al.seen_at IS NULL ORDER BY ac.timestamp DESC"
     ).fetchall()
     out = []
     for r in rows:
         try:
-            project = (json.loads(r[10] or "{}").get("project")
-                       or (json.loads(r[10] or "{}").get("cwd") or "").rsplit("/", 1)[-1])
+            raw = json.loads(r[10] or "{}")
         except ValueError:
-            project = ""
+            raw = {}
+        project = raw.get("project") or (raw.get("cwd") or "").rsplit("/", 1)[-1]
         out.append({
             "id": r[0], "rule": r[1], "rule_text": RULES.get(r[1], r[1]), "message": r[2],
             "action_id": r[4], "time": datetime.fromtimestamp(r[5]).strftime("%Y-%m-%d %H:%M"),
             "day": datetime.fromtimestamp(r[5]).date().isoformat(), "agent": r[6],
             "action_type": r[7], "target": r[8] or "", "project": project or "(unknown project)",
+            "what": describe(r[7], r[8], str(raw.get("tool") or ""), raw.get("cwd"),
+                             {"amount": r[11], "currency": r[12]}),
             "reason": (r[9] or "").split("; reversibility: ")[-1].split(" | ")[0],
         })
     return out

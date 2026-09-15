@@ -19,7 +19,8 @@
     <td><input type="checkbox" name="id" value="{{ i.id }}"></td>
     <td><a href="/day/{{ i.day }}">{{ i.time }}</a></td>
     <td class="note">{{ i.agent }}<br>{{ i.project }}</td>
-    <td class="mono">{{ i.action_type }}: {{ i.target[:300] }}{% if i.target|length > 300 %}&hellip;{% endif %}
+    <td><div>{{ i.what }}</div>
+      <div class="mono raw">{{ i.target[:300] }}{% if i.target|length > 300 %}&hellip;{% endif %}</div>
       {% if i.reason %}<div class="note">{{ i.reason }}</div>{% endif %}</td>
     <td><span class="pill unknown">{{ i.rule }}</span><div class="note">{{ i.rule_text }}</div></td>
   </tr>

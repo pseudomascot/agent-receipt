@@ -12,7 +12,7 @@ from datetime import datetime
 
 from queries import coverage_notes
 
-COLUMNS = ["timestamp", "date", "time", "agent", "user", "project", "action_type", "target",
+COLUMNS = ["timestamp", "date", "time", "agent", "user", "project", "action_type", "what", "target",
            "reversible", "reversible_reason", "attribution", "attribution_note",
            "artifact_link", "amount", "currency", "source_ref"]
 
@@ -56,7 +56,7 @@ def _rows(conn, stats: dict):
         when = datetime.fromtimestamp(a["timestamp"])
         out.append([
             when.isoformat(timespec="seconds"), when.date().isoformat(), when.strftime("%H:%M:%S"),
-            a["agent"], a["user"], a["project"], a["action_type"], full.get(a["id"], a["target"]),
+            a["agent"], a["user"], a["project"], a["action_type"], a.get("what", ""), full.get(a["id"], a["target"]),
             a["reversible"], a["reversible_reason"], a["attribution"], a["note"].split(" | ")[-1],
             a["artifact_link"] or "", a["amount"] if a["amount"] is not None else "",
             a["currency"] or "", a.get("source_ref") or "",

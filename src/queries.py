@@ -6,6 +6,8 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from describe import describe
+
 # What the receipt can and cannot see. Shown on every page so gaps are never silent.
 STATIC_COVERAGE = [
     ("Claude Code sessions (CLI and the desktop app's Code tab)", "covered",
@@ -67,6 +69,13 @@ def _context(raw_json):
     except ValueError:
         return None, None, None
     return data.get("cwd"), data.get("session_id"), data.get("project")
+
+
+def _tool(raw_json) -> str:
+    try:
+        return str(json.loads(raw_json or "{}").get("tool") or "")
+    except ValueError:
+        return ""
 
 
 def _reversibility_reason(note: str) -> str:
@@ -151,6 +160,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
             "user": r[12] or "(unknown user)",
             "action_type": r[3],
             "target": target,
+            "what": describe(r[3], target, _tool(r[11]), cwd, {"amount": r[5], "currency": r[6]}),
             "short_target": shown.splitlines()[0][:SHORT_TARGET] if shown else "",
             "full_target": shown,
             "is_long": len(shown) > SHORT_TARGET or "\n" in shown,
