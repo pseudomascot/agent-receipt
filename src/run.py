@@ -18,6 +18,7 @@ from calendar_connector import sync_if_configured as calendar_sync_if_configured
 from email_connector import sync_if_configured
 from google_calendar import sync_if_configured as google_sync_if_configured
 from log_parser import SOURCES, current_user, ingest_all, reconcile
+from ramp_connector import sync_if_configured as ramp_sync_if_configured
 from stripe_connector import sync_if_configured as stripe_sync_if_configured
 from statement import HOST, PORT
 from store import DB_PATH, connect
@@ -40,6 +41,7 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
         stripe = stripe_sync_if_configured(conn, current_user()) if email else None
         calendar = calendar_sync_if_configured(conn, current_user()) if email else None
         google = google_sync_if_configured(conn, current_user()) if email else None
+        ramp = ramp_sync_if_configured(conn, current_user()) if email else None
         counts = correlate(conn)
         new_alerts = evaluate(conn)
         notified = notify_new(new_alerts, notifier)
@@ -56,6 +58,8 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
         result["calendar"] = calendar
     if google:
         result["google_calendar"] = google
+    if ramp:
+        result["ramp"] = ramp
     return result
 
 

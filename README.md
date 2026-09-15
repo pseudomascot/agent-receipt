@@ -94,6 +94,11 @@ stay inside this folder; `make_app.command` rebuilds it.
   `send_email` rows; card-issuer alert emails become `purchase` rows.
 - **Stripe:** a key in `.env` (`docs/STRIPE.md`). Charges the agent collects,
   and purchases on its own Issuing card where Issuing is activated.
+- **Ramp (a card and budget per agent):** client credentials in `.env`
+  (`docs/RAMP.md`). The Agents page can *give an agent its own Ramp fund* —
+  a budget that issues a virtual card — so its purchases are its own by
+  construction and the Stop page can suspend or terminate just that card.
+  Sandbox by default; declines are recorded too.
 
 ## What it does not see
 Claude Desktop chat (outside the Code tab), Google Antigravity, and — until

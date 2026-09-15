@@ -95,3 +95,37 @@ def google_calendar_settings(env: dict | None = None) -> dict | None:
 
 def google_calendar_configured() -> bool:
     return google_calendar_settings() is not None
+
+
+RAMP_HOSTS = {
+    "sandbox": {"api": "https://demo-api.ramp.com", "app": "https://demo.ramp.com"},
+    "production": {"api": "https://api.ramp.com", "app": "https://app.ramp.com"},
+}
+RAMP_SCOPES = "funds:read funds:write transactions:read users:read cards:read"
+
+
+def ramp_settings(env: dict | None = None) -> dict | None:
+    """Ramp Developer API settings (docs/RAMP.md), or None unless a client id/secret is set.
+
+    Sandbox by default: demo-api.ramp.com moves no real money. RECEIPT_RAMP_ENV=production
+    switches to the live API; the mode is part of the agent label so a statement never
+    mixes them up silently."""
+    env = env if env is not None else load_env()
+    client_id, secret = env.get("RECEIPT_RAMP_CLIENT_ID"), env.get("RECEIPT_RAMP_CLIENT_SECRET")
+    if not client_id or not secret or "PASTE" in client_id:
+        return None
+    mode = "production" if (env.get("RECEIPT_RAMP_ENV") or "sandbox").strip().lower() == "production" else "sandbox"
+    return {
+        "client_id": client_id,
+        "client_secret": secret,
+        "mode": mode,
+        "api": RAMP_HOSTS[mode]["api"],
+        "app": RAMP_HOSTS[mode]["app"],
+        "user_id": (env.get("RECEIPT_RAMP_USER_ID") or "").strip() or None,
+        "agent": env.get("RECEIPT_RAMP_AGENT") or f"ramp card ({mode})",
+        "scopes": env.get("RECEIPT_RAMP_SCOPES") or RAMP_SCOPES,
+    }
+
+
+def ramp_configured() -> bool:
+    return ramp_settings() is not None

@@ -15,7 +15,9 @@ from agents import retired as retired_agents
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from doctor import status as machine_status
 from export import export_csv, money_csv
+from config import ramp_settings
 from log_parser import current_user
+from ramp_connector import RampError, issue_fund
 from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
                      statement, type_label)
 from stop import controls as stop_controls
@@ -177,8 +179,35 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             integrity = status_line(conn)
         finally:
             conn.close()
+        ramp = ramp_settings()
         return render_template("agents.html", agents=items, changes=changes, coverage_notes=coverage_notes(),
-                               integrity=integrity, nav="agents")
+                               integrity=integrity, nav="agents", ramp_mode=ramp["mode"] if ramp else None,
+                               ramp_ready=bool(ramp and ramp.get("user_id")), message=request.args.get("msg"),
+                               ok=request.args.get("ok") == "1")
+
+    @app.route("/agents/card", methods=["POST"])
+    def agents_card():
+        agent = (request.form.get("agent") or "").strip()
+        interval = (request.form.get("interval") or "MONTHLY").strip().upper()
+        try:
+            limit = float(request.form.get("limit") or 0)
+        except ValueError:
+            limit = 0.0
+        settings = ramp_settings()
+        if not settings or not agent:
+            return redirect("/agents?" + urlencode({"msg": "Ramp is not configured (docs/RAMP.md)", "ok": "0"}))
+        conn = db()
+        try:
+            label = agent_display_fn(agent, nicknames(conn), known_identities())["name"]
+            try:
+                fund = issue_fund(conn, settings, agent, label, limit, interval, current_user())
+                msg, ok = (f"Gave {label} a Ramp card: {limit:,.2f} USD per {interval.lower()}"
+                           + (f", card •••• {fund['last4']}" if fund["last4"] else "") + f" ({settings['mode']})"), "1"
+            except (RampError, OSError, ValueError, KeyError) as exc:
+                msg, ok = f"Ramp did not issue the card: {exc}", "0"
+        finally:
+            conn.close()
+        return redirect("/agents?" + urlencode({"msg": msg, "ok": ok}))
 
     @app.route("/agents/status", methods=["POST"])
     def agents_status():
@@ -211,8 +240,13 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             integrity = status_line(conn)
         finally:
             conn.close()
+        conn = db()
+        try:
+            items = stop_controls(None, conn)
+        finally:
+            conn.close()
         groups = {}
-        for c in stop_controls():
+        for c in items:
             groups.setdefault(c["agent"], []).append(c)
         return render_template("stop.html", groups=list(groups.items()), history=history,
                                message=request.args.get("msg"), ok=request.args.get("ok") == "1",

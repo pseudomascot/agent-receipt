@@ -16,7 +16,7 @@ import sqlite3
 import time
 from datetime import datetime
 
-from config import calendar_settings, email_settings, google_calendar_settings, load_env, stripe_settings
+from config import calendar_settings, email_settings, google_calendar_settings, load_env, ramp_settings, stripe_settings
 
 RECEIPT_AGENT = "agent receipt"          # rows the app writes about its own buttons
 LOCAL_HARNESSES = {"claude-code": "Claude Code", "cowork": "Cowork", "codex": "Codex"}
@@ -39,6 +39,9 @@ def known_identities(env: dict | None = None) -> dict:
     stripe = stripe_settings(env)
     if stripe:
         out[stripe["agent"]] = ("card", f"a Stripe account ({stripe['mode']} mode)")
+    ramp = ramp_settings(env)
+    if ramp:
+        out[ramp["agent"]] = ("card", f"a Ramp account ({ramp['mode']}) — transactions not on a fund issued to an agent")
     cal = calendar_settings(env)
     if cal:
         out[cal["agent"]] = ("calendar", "the Mac Calendar app (no login of its own)")
@@ -163,6 +166,9 @@ def list_agents(conn: sqlite3.Connection, env: dict | None = None) -> list[dict]
     ):
         by_type.setdefault(name, {})[action_type] = n
 
+    funds = {}
+    for r in conn.execute("SELECT fund_id, agent, limit_amount, currency, interval, card_last4, state FROM ramp_funds WHERE state != 'TERMINATED'"):
+        funds[r[1]] = {"fund_id": r[0], "limit": r[2], "currency": r[3], "interval": (r[4] or "").lower(), "last4": r[5] or "", "state": r[6] or ""}
     out = []
     for name in set(stats) | set(known) | set(status):
         s = stats.get(name)
@@ -175,7 +181,7 @@ def list_agents(conn: sqlite3.Connection, env: dict | None = None) -> list[dict]
             "last_ts": s["last"] if s else 0,
             "total": s["total"] if s else 0, "irreversible": s["irreversible"] if s else 0,
             "money": s["money"] if s else 0, "by_type": by_type.get(name, {}),
-            "open_alerts": open_alerts.get(name, 0), "retired": status.get(name),
+            "open_alerts": open_alerts.get(name, 0), "retired": status.get(name), "fund": funds.get(name),
         })
     out.sort(key=lambda a: (a["retired"] is not None, -a["last_ts"], a["name"]))
     return out

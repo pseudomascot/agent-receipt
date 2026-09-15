@@ -25,8 +25,9 @@ import uuid
 from pathlib import Path
 
 from agents import INSERT, RECEIPT_AGENT
-from config import calendar_settings, email_settings, google_calendar_settings, load_env, stripe_settings
+from config import calendar_settings, email_settings, google_calendar_settings, load_env, ramp_settings, stripe_settings
 from google_calendar import TOKEN_PATH, _post_form, load_token
+from ramp_connector import RampError, funds_for_agents, set_fund_state
 from stripe_connector import StripeError, request
 
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
@@ -45,10 +46,34 @@ def _control(id, agent, title, mode, effect, detail, url=None, steps=(), danger=
             "url": url, "steps": list(steps), "danger": danger, "reversible": reversible, "reason": reason}
 
 
-def controls(env: dict | None = None) -> list[dict]:
-    """Every control that applies to this machine's configuration. No secrets in the output."""
+def controls(env: dict | None = None, conn: sqlite3.Connection | None = None) -> list[dict]:
+    """Every control that applies to this machine's configuration. No secrets in the output.
+
+    `conn` adds one suspend/unsuspend/terminate trio per Ramp fund the app handed to an agent."""
     env = env if env is not None else load_env()
     out = []
+
+    ramp = ramp_settings(env)
+    if ramp and conn is not None:
+        for fund in funds_for_agents(conn).values():
+            if fund["state"] == "TERMINATED":
+                continue
+            card = f" (card •••• {fund['card_last4']})" if fund["card_last4"] else ""
+            budget = f"{fund['limit_amount']:,.2f} {fund['currency']} per {(fund['interval'] or '').lower()}"
+            if fund["state"] == "SUSPENDED":
+                out.append(_control(
+                    f"ramp_unsuspend:{fund['fund_id']}", fund["agent"], "Unsuspend the agent's Ramp card", "api", STOPS,
+                    f"Lifts the suspension on this agent's fund{card}; purchases work again within its budget of {budget}.",
+                    reason="it can be suspended again"))
+            else:
+                out.append(_control(
+                    f"ramp_suspend:{fund['fund_id']}", fund["agent"], "Suspend the agent's Ramp card", "api", STOPS,
+                    f"Suspends this agent's Ramp fund{card} — every purchase on it declines from this moment. Budget was {budget}.",
+                    reason="the fund can be unsuspended from this page"))
+            out.append(_control(
+                f"ramp_terminate:{fund['fund_id']}", fund["agent"], "Terminate the agent's Ramp card (permanent)", "api", STOPS,
+                f"Terminates the fund{card}. A terminated fund cannot come back; a new one has to be issued.",
+                danger=True, reversible=0, reason="a terminated fund is gone for good"))
 
     mail = email_settings(env)
     if mail:
@@ -143,8 +168,8 @@ def controls(env: dict | None = None) -> list[dict]:
     return out
 
 
-def find(control_id: str, env: dict | None = None) -> dict | None:
-    return next((c for c in controls(env) if c["id"] == control_id), None)
+def find(control_id: str, env: dict | None = None, conn: sqlite3.Connection | None = None) -> dict | None:
+    return next((c for c in controls(env, conn) if c["id"] == control_id), None)
 
 
 # --- doing it ------------------------------------------------------------------
@@ -168,20 +193,22 @@ def _end(name: str) -> int:
 
 
 def run(conn: sqlite3.Connection, control_id: str, user: str, env: dict | None = None,
-        stripe_api=request, post=_post_form, token_path: Path = TOKEN_PATH, end_processes=_end) -> dict:
+        stripe_api=request, post=_post_form, token_path: Path = TOKEN_PATH, end_processes=_end, ramp_call=None) -> dict:
     """Press one control (or "all"). Returns {"ok", "message", "results"} and records every press."""
     env = env if env is not None else load_env()
+    if ramp_call is None:
+        from ramp_connector import api as ramp_call
     if control_id == "all":
         results = []
-        for c in controls(env):
+        for c in controls(env, conn):
             if c["mode"] in ("api", "process") and not c["danger"]:
-                results.append(run(conn, c["id"], user, env, stripe_api, post, token_path, end_processes))
+                results.append(run(conn, c["id"], user, env, stripe_api, post, token_path, end_processes, ramp_call))
         ok = all(r["ok"] for r in results) if results else False
         message = "; ".join(r["message"] for r in results) or "nothing on this Mac can be stopped by the app itself"
         _record(conn, "all", None, user, "Freeze all: " + message, ok, 1, "each step can be undone on its own")
         return {"ok": ok, "message": message, "results": results}
 
-    c = find(control_id, env)
+    c = find(control_id, env, conn)
     if c is None:
         return {"ok": False, "message": "no such control", "results": []}
     if c["mode"] == "link":
@@ -192,6 +219,12 @@ def run(conn: sqlite3.Connection, control_id: str, user: str, env: dict | None =
             message, ok = _stripe_cards(env, "inactive" if c["id"] == "stripe_freeze" else "canceled", stripe_api)
         elif c["id"] == "google_token":
             message, ok = _google_revoke(post, token_path)
+        elif c["id"].startswith(("ramp_suspend:", "ramp_unsuspend:", "ramp_terminate:")):
+            action, fund_id = c["id"].split(":", 1)
+            action = action[len("ramp_"):]
+            fund = set_fund_state(conn, ramp_settings(env), fund_id, action, call=ramp_call)
+            verb = {"suspend": "suspended", "unsuspend": "unsuspended", "terminate": "terminated"}[action]
+            message, ok = f"{verb} the Ramp fund — Ramp now reports it {(fund.get('state') or verb).lower()}", True
         elif c["id"] == "codex_processes":
             n = end_processes("codex")
             message, ok = (f"ended {n} Codex process{'es' if n != 1 else ''}" if n else "no Codex process was running"), True
@@ -202,6 +235,8 @@ def run(conn: sqlite3.Connection, control_id: str, user: str, env: dict | None =
             message, ok = "this control has no action", False
     except StripeError as exc:
         message, ok = f"Stripe refused: {exc}", False
+    except RampError as exc:
+        message, ok = f"Ramp refused: {exc}", False
     except Exception as exc:  # noqa: BLE001 - a failed press must still be recorded
         message, ok = f"failed: {exc}", False
     _record(conn, c["id"], c["agent"], user, f"{c['title']}: {message}", ok, c["reversible"], c["reason"])

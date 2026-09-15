@@ -121,7 +121,7 @@ def test_stop_page_and_route(tmp_path, monkeypatch):
     import statement as statement_module
     db = tmp_path / "t.db"
     connect(db).close()
-    monkeypatch.setattr(statement_module, "stop_controls", lambda: controls(ENV))
+    monkeypatch.setattr(statement_module, "stop_controls", lambda *a, **k: controls(ENV))
     client = create_app(db).test_client()
     html = client.get("/stop").get_data(as_text=True)
     assert 'href="/stop" class="on"' in html and "Freeze all" in html

@@ -97,6 +97,21 @@ CREATE TABLE IF NOT EXISTS agent_names (
     by_user TEXT
 );
 
+-- Ramp funds (a budget that issues a virtual card) handed to agents from the Agents page.
+-- The fund's transactions are attributed to that agent by construction.
+CREATE TABLE IF NOT EXISTS ramp_funds (
+    fund_id TEXT PRIMARY KEY,
+    agent TEXT NOT NULL,
+    display_name TEXT,
+    limit_amount REAL,
+    currency TEXT,
+    interval TEXT,
+    card_last4 TEXT,
+    state TEXT,
+    created_at REAL NOT NULL,
+    by_user TEXT
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

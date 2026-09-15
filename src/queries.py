@@ -28,13 +28,16 @@ STATIC_COVERAGE = [
 
 
 def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None,
-                   calendar_on: bool | None = None, google_on: bool | None = None) -> list:
-    if email_on is None or stripe_on is None or calendar_on is None or google_on is None:
-        from config import calendar_configured, email_configured, google_calendar_configured, stripe_configured
+                   calendar_on: bool | None = None, google_on: bool | None = None,
+                   ramp_on: bool | None = None) -> list:
+    if email_on is None or stripe_on is None or calendar_on is None or google_on is None or ramp_on is None:
+        from config import (calendar_configured, email_configured, google_calendar_configured, ramp_configured,
+                            stripe_configured)
         email_on = email_configured() if email_on is None else email_on
         stripe_on = stripe_configured() if stripe_on is None else stripe_on
         calendar_on = calendar_configured() if calendar_on is None else calendar_on
         google_on = google_calendar_configured() if google_on is None else google_on
+        ramp_on = ramp_configured() if ramp_on is None else ramp_on
     dynamic = [
         ("Calendar (the macOS Calendar app and everything it syncs)", "covered" if calendar_on else "not covered",
          "Events created, changed, or deleted, read locally by asking the Calendar app." if calendar_on
@@ -51,14 +54,17 @@ def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None,
         ("Card charges (Stripe Issuing) and charges collected via Stripe", "covered" if stripe_on else "not covered",
          "Polled from the Stripe API with the key in .env, at Stripe's own event times." if stripe_on
          else "Set RECEIPT_STRIPE_TEST_KEY (or RECEIPT_STRIPE_KEY) in .env (docs/STRIPE.md)."),
+        ("Card purchases on Ramp (the agent's own fund and card)", "covered" if ramp_on else "not covered",
+         "Polled from Ramp's API; purchases on a fund issued to an agent are that agent's by construction, declines included." if ramp_on
+         else "Set RECEIPT_RAMP_CLIENT_ID / RECEIPT_RAMP_CLIENT_SECRET in .env (docs/RAMP.md)."),
         ("Crypto wallet", "not covered", "Planned."),
     ]
     return STATIC_COVERAGE + dynamic
 
 
 def not_covered(email_on: bool | None = None, stripe_on: bool | None = None,
-                calendar_on: bool | None = None, google_on: bool | None = None) -> list:
-    return [name for name, status, _ in coverage_notes(email_on, stripe_on, calendar_on, google_on)
+                calendar_on: bool | None = None, google_on: bool | None = None, ramp_on: bool | None = None) -> list:
+    return [name for name, status, _ in coverage_notes(email_on, stripe_on, calendar_on, google_on, ramp_on)
             if status == "not covered"]
 ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
 TYPE_LABELS = {

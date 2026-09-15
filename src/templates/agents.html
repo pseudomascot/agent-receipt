@@ -4,6 +4,11 @@
 {% set active = agents|rejectattr('retired')|list %}
 {% set gone = agents|selectattr('retired')|list %}
 <div class="page-title"><h1>Agents</h1><span class="sub">{{ active|length }} active · {{ gone|length }} retired</span></div>
+{% if message %}
+<div class="card" style="padding:12px 16px; margin-bottom:16px; border-left:4px solid {{ 'var(--human-fg)' if ok else 'var(--bad-fg)' }}">
+  <b>{{ 'Done' if ok else 'Not done' }}.</b> {{ message }}{% if ok %} <span class="note">— recorded on today's receipt.</span>{% endif %}
+</div>
+{% endif %}
 
 <section class="card" data-section="agents">
 <h2>Who has acted on this Mac</h2>
@@ -11,6 +16,7 @@
   Identities come from the agents' own logs, from credentials the receipt reads (a mailbox, a card, a Google account),
   or from what an agent declares through the inbox — they are observed, not issued.
   Give an agent a name of your own ("Bookkeeping bot") and that name is used on every statement, alert and export; the log's own label stays underneath.
+  {% if ramp_mode %}<b>Give a card</b> hands an agent its own Ramp fund — a budget that issues a virtual card — so its purchases are its own by construction and can be cut off on their own ({{ ramp_mode }}; docs/RAMP.md).{% endif %}
   <b>Retire</b> says "from now on this agent is not supposed to act": nothing it did is removed or hidden,
   its rows stay on every statement, and anything it does afterwards is flagged for review.
   Retiring does not stop the agent — that takes revoking its mailbox, card or account at the issuer.
@@ -37,6 +43,21 @@
       {% else %}<span class="note">nothing yet</span>{% endif %}</td>
     <td>{% if a.open_alerts %}<a href="/alerts" class="pill unknown">{{ a.open_alerts }}</a>{% else %}<span class="note">0</span>{% endif %}</td>
     <td>
+      {% if a.fund %}
+      <div style="margin-bottom:6px"><span class="pill {{ 'covered' if a.fund.state == 'ACTIVE' else 'not' }}" title="Ramp fund {{ a.fund.fund_id }}">Ramp card{% if a.fund.last4 %} •••• {{ a.fund.last4 }}{% endif %} · {{ a.fund.state|lower }}</span>
+        <div class="note">{{ '%.2f'|format(a.fund.limit) }} {{ a.fund.currency }} per {{ a.fund.interval }} · <a href="/stop">suspend or terminate on the Stop page</a></div></div>
+      {% elif ramp_mode and not a.retired %}
+      <form method="post" action="/agents/card" class="screen-only" style="margin-bottom:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center"
+            onsubmit="return confirm('Give {{ a.label|e }} its own Ramp card ({{ ramp_mode }}) with this budget?')">
+        <input type="hidden" name="agent" value="{{ a.name }}">
+        <span class="note">Ramp card:</span>
+        <input type="number" name="limit" min="1" step="1" value="100" style="width:72px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px" title="budget in USD">
+        <select name="interval" style="padding:5px 6px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
+          <option value="MONTHLY">per month</option><option value="DAILY">per day</option><option value="WEEKLY">per week</option><option value="TOTAL">in total</option>
+        </select>
+        <button type="submit" class="btn"{% if not ramp_ready %} disabled title="Set RECEIPT_RAMP_USER_ID in .env first (docs/RAMP.md)"{% endif %}>Give a card</button>
+      </form>
+      {% endif %}
       {% if a.retired %}
       <span class="pill not">retired</span> <span class="note">{{ a.retired.when }}{% if a.retired.by_user %} by {{ a.retired.by_user }}{% endif %}</span>
       {% if a.retired.note %}<div class="note">{{ a.retired.note }}</div>{% endif %}
