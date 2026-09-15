@@ -99,13 +99,30 @@ def _browser_verb(action: str) -> str:
     }.get(action, action.replace("_", " "))
 
 
+LEADING_CD = re.compile(r'^\s*cd\s+(?:"[^"]*"|\'[^\']*\'|\S+)\s*(?:&&|;)\s*')
+
+
+def _without_leading_cd(command: str) -> str:
+    """`cd "/some/project" && real command` -> `real command` (the project is shown elsewhere)."""
+    return LEADING_CD.sub("", command, count=1) or command
+
+
+HEREDOC = re.compile(r"\s*<<-?\s*['\"]?\w+['\"]?")
+
+
 def _describe_command(command: str) -> str:
+    command = _without_leading_cd(command)
+    suffix = ""
+    m = HEREDOC.search(command)
+    if m:                                    # `python - <<'EOF' …`: describe the command, not the script body
+        command, suffix = command[:m.start()], " (with an inline script)"
     try:
         lex = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=True)
         lex.whitespace_split = True
         tokens = list(lex)
     except ValueError:
-        return f"Ran a command: {_short(command)}"
+        # Unbalanced quotes (sed scripts and the like): fall back to the raw text.
+        return f"Ran a command: {_short(command)}{suffix}"
     parts, segment = [], []
     for tok in tokens + [";"]:
         if tok in SEPARATORS:
@@ -117,11 +134,11 @@ def _describe_command(command: str) -> str:
         else:
             segment.append(tok)
     if not parts:
-        return f"Ran a command: {_short(command)}"
+        return f"Ran a command: {_short(command)}{suffix}"
     text = "; ".join(parts[:MAX_PARTS])
     if len(parts) > MAX_PARTS:
         text += f"; and {len(parts) - MAX_PARTS} more"
-    return text[0].upper() + text[1:]
+    return text[0].upper() + text[1:] + suffix
 
 
 def _describe_segment(tokens):

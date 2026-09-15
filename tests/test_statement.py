@@ -221,3 +221,18 @@ def test_bad_day_is_404(tmp_path):
     db = tmp_path / "t.db"
     connect(db).close()
     assert create_app(db).test_client().get("/day/not-a-date").status_code == 404
+
+
+def test_subagent_rows_are_tagged(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    conn = connect(db)
+    conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+                 "VALUES (?, 'claude-code / Explore: tidy tests', 'marc', 'log', 'file_write', 'w.py', 'agent', 'agent log', ?)",
+                 (T + 30, _raw("/Users/marc/proj-a")))
+    conn.commit()
+    conn.close()
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    assert "↳ claude-code / Explore: tidy tests (1)" in html                     # chip marks the worker
+    assert 'title="A worker started by the agent named before the slash">sub-agent</span>' in html
+    assert html.count(">sub-agent</span>") == 1                                  # only the worker's row

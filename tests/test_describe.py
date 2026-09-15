@@ -43,3 +43,12 @@ def test_files_and_others():
     assert describe("other", "https://example.com", "mcp__Claude_Browser__navigate") == "Opened a web page: https://example.com"
     assert describe("other", "charged Jane Client", "", extra={"amount": 420.0}) == "Moved money: charged Jane Client"
     assert describe("other", "left_click", "mcp__computer-use__left_click") == "Controlled the screen: clicked"
+
+
+def test_leading_cd_is_dropped_even_when_shell_parsing_fails():
+    heredoc = 'cd "/Users/marc/Desktop/Claude Business Ideas/agent-receipt" && .venv/bin/python - <<\'EOF\'\nprint("x")'
+    out = describe("execute", heredoc)
+    assert "python" in out and "cd " not in out and "print" not in out and out.endswith("(with an inline script)")
+    sed = "cd '/tmp/p q' && sed -i '' 's/a \\/ b/c/' file.txt"
+    assert "cd " not in describe("execute", sed)
+    assert describe("execute", "cd /tmp && ls") in ("Ran a command: ls", "Listed files")  # whatever the rules say, no cd
