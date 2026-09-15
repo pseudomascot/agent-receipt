@@ -232,16 +232,17 @@ def _epoch(text) -> float | None:
 def sync(conn: sqlite3.Connection, settings: dict, user: str = "", call=api, since_days: int = 30) -> dict:
     """Pull Ramp transactions since the last sync into `actions`. Returns counts."""
     ours = funds_for_agents(conn)
+    # `ramp_since` is the time of the last sync, not the newest transaction seen: sandbox
+    # data (and late-settling real charges) can carry dates in the future or the past.
     row = conn.execute("SELECT value FROM meta WHERE key = 'ramp_since'").fetchone()
-    since = datetime.fromtimestamp(float(row[0]), tz=timezone.utc) - timedelta(days=1) if row else \
+    started = time.time()
+    since = datetime.fromtimestamp(float(row[0]), tz=timezone.utc) - timedelta(days=3) if row else \
         datetime.now(timezone.utc) - timedelta(days=since_days)
     txs = list_all(settings, "/developer/v1/transactions",
                    {"from_date": since.isoformat(timespec="seconds"), "order_by_date_asc": "true"}, call=call)
     counts = {"seen": len(txs), "new": 0, "agent": 0, "declined": 0}
-    latest = float(row[0]) if row else 0.0
     for tx in txs:
         ts = _epoch(tx.get("user_transaction_time")) or _epoch(tx.get("settlement_date")) or time.time()
-        latest = max(latest, ts)
         amount, currency = _money(tx)
         merchant = tx.get("merchant_name") or tx.get("merchant_descriptor") or "unknown merchant"
         state = (tx.get("state") or "").upper()
@@ -254,9 +255,14 @@ def sync(conn: sqlite3.Connection, settings: dict, user: str = "", call=api, sin
         if fund:
             agent, source, attribution = fund["agent"], "log", "agent"
             note = f"by credential: Ramp fund '{fund['display_name']}' issued to this agent"
+        elif holder_name:
+            # A Ramp card belongs to a named person. Not on a fund we issued to an agent ->
+            # that person's purchase, by credential (the correlator leaves "by credential" rows alone).
+            agent, source, attribution = settings["agent"], "card", "human"
+            note = f"by credential: Ramp card of {holder_name} ({settings['mode']} account), not a fund issued to an agent"
         else:
             agent, source, attribution = settings["agent"], "card", "unknown"
-            note = f"Ramp transaction on the {settings['mode']} account" + (f", card holder {holder_name}" if holder_name else "")
+            note = f"Ramp transaction on the {settings['mode']} account with no card holder named"
         if declined:
             reason = ((tx.get("decline_details") or {}).get("reason") if isinstance(tx.get("decline_details"), dict) else None)
             note += f"; declined by Ramp{': ' + str(reason) if reason else ''}"
@@ -277,8 +283,7 @@ def sync(conn: sqlite3.Connection, settings: dict, user: str = "", call=api, sin
         elif state:   # state moved (PENDING -> CLEARED): keep the note honest without touching attribution
             conn.execute("UPDATE actions SET raw_json = json_set(raw_json, '$.state', ?) WHERE source_ref = ? AND source IN ('card', 'log')",
                          (state, f"ramp:{tx.get('id')}"))
-    if latest:
-        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ramp_since', ?)", (str(latest),))
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ramp_since', ?)", (str(started),))
     conn.execute("INSERT INTO coverage (source, started_at, ended_at) VALUES ('card', ?, ?)",
                  (since.timestamp(), time.time()))
     conn.commit()

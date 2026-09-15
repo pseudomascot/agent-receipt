@@ -63,12 +63,16 @@ def attribute(source: str, covered: bool, input_count: int, log_match: bool, win
 
 def correlate(conn: sqlite3.Connection, window: float = WINDOW_SECONDS) -> dict:
     """Re-attribute every action. Returns counts by attribution."""
-    rows = conn.execute("SELECT id, timestamp, source, confidence_note FROM actions").fetchall()
+    rows = conn.execute("SELECT id, timestamp, source, confidence_note, attribution FROM actions").fetchall()
     counts = {"agent": 0, "human": 0, "unknown": 0}
-    for action_id, ts, source, note in rows:
+    for action_id, ts, source, note, stored in rows:
         if source == "input":
             # The app's own buttons (retire / restore an agent): a person pressed them.
             attribution, reason = "human", "a button in Agent Receipt was pressed"
+        elif source != "log" and (note or "").startswith("by credential:"):
+            # Attributed by who owns the credential (a named person's Ramp card): keyboard
+            # timing adds nothing, so the connector's verdict stands.
+            attribution, reason = stored, "attributed by the credential's owner, not by keyboard timing"
         else:
             covered = is_input_covered(conn, ts)
             input_count = count_input_before(conn, ts, window)

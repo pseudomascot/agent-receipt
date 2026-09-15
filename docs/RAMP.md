@@ -75,9 +75,14 @@ minutes it appears on the receipt.
 - **Money page / bookkeeping CSV** include Ramp purchases like any other.
 
 ## Honest limits
-- **Live status:** the token endpoint and user/fund listing are proven against
-  the sandbox (2026-09-15; the token body had to be form-encoded, as suspected).
-  Fund creation, suspension and transaction sync are next to prove.
+- **Live status (2026-09-15, sandbox):** token ✓ (form-encoded body), users ✓,
+  funds ✓, **issue a fund + virtual card ✓** (card •••• 5039, $25/day, named
+  "Agent · Sub-agent of Claude Code"), **suspend ✓ / unsuspend ✓** from the
+  Stop page, **transaction sync ✓** (91 demo purchases). Purchases on a card we
+  did not issue are attributed to the named card holder *by credential*
+  (attribution `person`), not left "unexplained" — otherwise every employee
+  coffee would be a Needs-review alert. A purchase on the agent's own fund is
+  the last thing to see live (make one in the sandbox with ⌘J on card 5039).
 - **Ramp cards belong to a user.** All agent funds hang off the one Ramp user
   in `RECEIPT_RAMP_USER_ID`. Identity lives in the *fund*, which is what
   transactions carry, so this is fine for attribution — but Ramp's own UI will

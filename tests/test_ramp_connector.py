@@ -126,7 +126,9 @@ def test_sync_attributes_fund_transactions_by_construction(tmp_path):
     d = rows["ramp:tx-2"]
     assert d[5] == "DECLINED: BIG SPEND" and d[6] == 99.0 and d[8] == 1 and "declined by Ramp: AUTHORIZER_CARD_LIMIT" in d[9]
     o = rows["ramp:tx-3"]
-    assert o[1:3] == ("ramp card (sandbox)", "card") and o[3] in ("human", "unknown") and "card holder Marc B" in o[9]
+    assert o[1:4] == ("ramp card (sandbox)", "card", "human") and "by credential: Ramp card of Marc B" in o[9]
+    assert "attributed by the credential's owner" in o[9]                     # the correlator left it alone
+    assert float(conn.execute("SELECT value FROM meta WHERE key = 'ramp_since'").fetchone()[0]) > 1.7e9   # sync time, not tx time
     assert conn.execute("SELECT state FROM ramp_funds WHERE fund_id = 'fund-1'").fetchone()[0] == "SUSPENDED"   # refreshed
     assert conn.execute("SELECT COUNT(*) FROM coverage WHERE source = 'card'").fetchone()[0] == 1
 
