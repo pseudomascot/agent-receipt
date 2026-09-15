@@ -168,7 +168,7 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
     # Two alerts: the scheduled irreversible commit, and the seeded unknown-attribution row.
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
     assert "2 need review</a>" in html
-    assert 'class="flagged"' in html and "unattended_irreversible" in html
+    assert 'class="flagged"' in html and "unattended irreversible" in html
     assert "Needs review: 2 open alert(s)." in html                            # summary line
 
     html = client.get("/alerts").get_data(as_text=True)
@@ -234,6 +234,7 @@ def test_subagent_rows_are_tagged(tmp_path):
     conn.close()
     html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
     assert 'title="claude-code / Explore: tidy tests">Sub-agent of Claude Code (1)</a>' in html   # plain-named chip
-    assert "<div>Sub-agent of Claude Code</div>" in html and "tidy tests" in html
-    assert html.count(">sub-agent</span>") == 1                                  # kind pill only on the worker's row
-    assert html.count(">local agent</span>") >= 3 and "<div>Claude Code</div>" in html
+    assert 'title="claude-code / Explore: tidy tests · sub-agent">Sub-agent of Claude Code</div>' in html and "tidy tests" in html
+    assert html.count('· sub-agent">Sub-agent of Claude Code</div>') == 1       # kind lives in the tooltip, once
+    assert html.count("· local agent\">") >= 3 and 'title="claude-code · local agent">Claude Code</div>' in html
+    assert html.count("Who did it</th>") == 1 and "<th style=\"width:250px\">Who</th>" not in html

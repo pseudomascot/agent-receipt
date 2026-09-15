@@ -90,11 +90,12 @@
 <div data-group="{{ loop.index }}">
 <h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
 <table>
-  <tr><th style="width:84px">Time</th><th style="width:190px">Who did it</th><th>What happened</th><th style="width:130px">Category</th><th style="width:120px">Undoable?</th><th style="width:250px">Who</th></tr>
+  <tr><th style="width:84px">Time</th><th style="width:230px">Who did it</th><th>What happened</th><th style="width:130px">Category</th><th style="width:130px">Undoable?</th></tr>
   {% for a in rows %}
   <tr data-type="{{ a.action_type }}"{% if a.id in alerted %} class="flagged"{% endif %}>
     <td class="time">{{ a.time }}</td>
-    {% set d = agent_display(a.agent) %}<td><div>{{ d.name }}</div><div class="note">{{ d.sub }}{% if by_user|length > 1 %} · {{ a.user }}{% endif %}</div><span class="pill type" title="{{ a.agent }}">{{ d.kind }}</span></td>
+    {% set d = agent_display(a.agent) %}<td><div title="{{ a.agent }} · {{ d.kind }}">{{ d.name }}</div><div class="note">{{ d.sub }}{% if by_user|length > 1 %} · {{ a.user }}{% endif %}</div>
+      <div style="margin-top:4px"><span class="pill {{ a.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[a.attribution] }}</span> <span class="note">{{ a.note.split(' | ')[-1] }}</span></div></td>
     <td>
       <div>{{ a.what }}</div>
       <div class="raw">
@@ -104,11 +105,10 @@
       {% else %}{{ a.full_target }}{% endif %}
       </div>
       {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{% if a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a> <span class="raw" style="display:inline">{{ a.artifact_link[:80] }}{% if a.artifact_link|length > 80 %}…{% endif %}</span>{% else %}{{ a.artifact_link }}{% endif %}</div>{% endif %}
-      {% if a.id in alerted %}<div style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> <span class="note">{{ alerted[a.id]|join(', ') }}</span></div>{% endif %}
+      {% if a.id in alerted %}<div style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> <span class="note">{{ alerted[a.id]|join(', ')|replace('_', ' ') }}</span></div>{% endif %}
     </td>
     <td><span class="pill type">{{ type_label(a.action_type) }}</span></td>
     <td>{{ a.reversible }}{% if a.reversible_reason %}<div class="note">{{ a.reversible_reason }}</div>{% endif %}</td>
-    <td><span class="pill {{ a.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[a.attribution] }}</span><div class="note">{{ a.note.split(' | ')[-1] }}</div></td>
   </tr>
   {% endfor %}
 </table>
