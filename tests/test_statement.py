@@ -237,4 +237,4 @@ def test_subagent_rows_are_tagged(tmp_path):
     assert 'title="claude-code / Explore: tidy tests · sub-agent">Sub-agent of Claude Code</div>' in html and "tidy tests" in html
     assert html.count('· sub-agent">Sub-agent of Claude Code</div>') == 1       # kind lives in the tooltip, once
     assert html.count("· local agent\">") >= 3 and 'title="claude-code · local agent">Claude Code</div>' in html
-    assert html.count("Who did it</th>") == 1 and "<th style=\"width:250px\">Who</th>" not in html
+    assert html.count("Who did it</th>") == 2 and ">Who</th>" not in html          # one table per project, no second Who column
