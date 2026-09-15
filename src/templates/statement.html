@@ -6,67 +6,86 @@
 {% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
 <div class="print-only note">Statement for {{ label }}. Printed from the local Agent Receipt page.</div>
 
-<nav class="screen-only">
+<div class="page-title">
+  <h1>{% if single_day %}{{ day }}{% else %}{{ label }}{% endif %}</h1>
+  <span class="sub">{% if single_day %}one day{% else %}{{ days_in_range }} days{% endif %} · {{ total }} action{{ '' if total == 1 else 's' }}</span>
+</div>
+<div class="page-actions screen-only">
   {% if single_day %}
-  <a href="/day/{{ prev_day }}">&larr; {{ prev_day }}</a> &nbsp;|&nbsp;
-  <b>{{ day }}</b> &nbsp;|&nbsp;
-  <a href="/day/{{ next_day }}">{{ next_day }} &rarr;</a> &nbsp;|&nbsp;
-  {% else %}
-  <b>{{ label }}</b> ({{ days_in_range }} days) &nbsp;|&nbsp;
+  <a class="btn" href="/day/{{ prev_day }}">&larr; {{ prev_day }}</a>
+  <a class="btn" href="/day/{{ next_day }}">{{ next_day }} &rarr;</a>
   {% endif %}
-  <a href="/">All days</a> &nbsp;|&nbsp; <a href="/week">Last 7 days</a> &nbsp;|&nbsp;
-  <a href="/month">Last 30 days</a> &nbsp;|&nbsp; <a href="/all">All time</a>
-  &nbsp;|&nbsp; <a href="/export.csv?start={{ start }}&end={{ end }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}">Download CSV ({{ shown_count }} rows)</a>
-  &nbsp;|&nbsp; <a href="#" onclick="window.print();return false">Print</a>
-</nav>
+  <a class="btn" href="/export.csv?start={{ start }}&end={{ end }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}">Download CSV</a>
+  <a class="btn" href="#" onclick="window.print();return false">Print</a>
+</div>
 
+<div class="filters screen-only">
+  <span class="label">View</span>
+  <button type="button" class="chip check" data-toggle-section="summary">Summary</button>
+  <button type="button" class="chip check" data-toggle-section="totals">Totals</button>
+  <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
+  {% if not single_day %}<button type="button" class="chip check" data-toggle-section="byday">By day</button>{% endif %}
+  <button type="button" class="chip check" data-toggle-section="actions">Actions</button>
+  <button type="button" class="chip check" data-toggle-section="unknown">Unexplained</button>
+  <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
+</div>
+
+<section class="card" data-section="summary">
 <h2>{% if single_day %}Daily summary{% else %}Summary{% endif %}</h2>
 <pre class="summary">{{ summary }}</pre>
 {% if single_day %}
-<div class="note screen-only">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — run <code>src/summary.py {{ day }}</code>.{% endif %}</div>
+<div class="note screen-only">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — it is written automatically while the app runs.{% endif %}</div>
 {% endif %}
+</section>
 
+<section class="card" data-section="totals">
 <h2>Totals</h2>
-<div class="totals">
-  <div><b>{{ total }}</b>actions</div>
-  <div><b>{{ by_attribution.agent }}</b><span class="pill agent">agent</span></div>
-  <div><b>{{ by_attribution.human }}</b><span class="pill human">human</span></div>
-  <div><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unknown</span></div>
-  {% for cur, amt in money.items() %}<div><b>{{ '%.2f'|format(amt) }}</b>{{ cur }} spent</div>{% endfor %}
+<div class="tiles">
+  <div class="tile"><b>{{ total }}</b><span class="label">actions</span></div>
+  <div class="tile"><b>{{ by_attribution.agent }}</b><span class="pill agent">by an agent</span></div>
+  <div class="tile"><b>{{ by_attribution.human }}</b><span class="pill human">by a person</span></div>
+  <div class="tile"><b>{{ by_attribution.unknown }}</b><span class="pill unknown">unexplained</span></div>
+  {% for type, n in by_type %}<div class="tile"><b>{{ n }}</b><span class="label">{{ type_label(type) }}</span></div>{% endfor %}
+  {% for cur, amt in money.items() %}<div class="tile"><b>{{ '%.2f'|format(amt) }}</b><span class="label">{{ cur }} moved</span></div>{% endfor %}
 </div>
-<div class="note" style="margin-top:8px"><b>agent</b> = the agent's own log says it did it. <b>human</b> = a person was typing or clicking just before it and no agent claims it (only possible for things seen through a mailbox or card, not from agent logs). <b>unknown</b> = neither.</div>
+<div class="note" style="margin-top:10px"><b>By an agent</b> = the agent's own log says it did it. <b>By a person</b> = someone was typing or clicking just before it and no agent claims it (only possible for things seen through a mailbox or card). <b>Unexplained</b> = neither.</div>
+</section>
 
 {% if not single_day and by_day %}
+<section class="card" data-section="byday">
 <h2>By day</h2>
 <table class="compact">
   <tr><th>Day</th><th>Actions</th></tr>
   {% for d, n in by_day %}<tr><td><a href="/day/{{ d }}">{{ d }}</a></td><td>{{ n }}</td></tr>{% endfor %}
 </table>
+</section>
 {% endif %}
 
+<section class="card" data-section="keyboard">
 <h2>Was anyone at the keyboard?</h2>
 {% if monitor_intervals %}
-<div class="note">Agent Receipt was watching the keyboard and mouse for about <b>{{ monitor_text }}</b>
+<div>Agent Receipt was watching the keyboard and mouse for about <b>{{ monitor_text }}</b>
   {% if single_day %}({% if monitor_intervals|length == 1 %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[0][1] }}{% else %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[-1][1] }}, with {{ monitor_intervals|length - 1 }} break{{ '' if monitor_intervals|length == 2 else 's' }}{% endif %}){% else %}across {{ monitor_intervals|length }} stretch{{ '' if monitor_intervals|length == 1 else 'es' }}{% endif %}.
   {% if uncovered %}<b>{{ uncovered }} of {{ total }}</b> actions happened while it wasn't watching — for those, it can't say whether a person was present.{% else %}It was watching for every action listed.{% endif %}
-  {% if single_day and monitor_intervals|length > 1 %}<details class="screen-only" style="display:inline"><summary style="display:inline;cursor:pointer;color:#1d4ed8">show times</summary>
-  {% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}</details>{% endif %}</div>
+  {% if single_day and monitor_intervals|length > 1 %}<details class="screen-only" style="display:inline"><summary style="display:inline;cursor:pointer;color:var(--accent)">show times</summary>
+  <span class="note">{% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}</span></details>{% endif %}</div>
 {% else %}
 <div class="note">Agent Receipt wasn't watching the keyboard and mouse {% if single_day %}on this day{% else %}in this range{% endif %}, so it can't say whether a person was present for any action. What the agents did is still certain — that comes from their own logs.</div>
 {% endif %}
+</section>
 
-<h2 id="actions">Actions</h2>
+<section class="card" data-section="actions">
+<h2>Actions</h2>
 <div class="filters screen-only">
-  <span class="note">Type:</span>
-  <a href="{{ base_url }}?{{ keep_agent }}{{ keep_user }}#actions" class="chip{% if not type_filter %} on{% endif %}">all ({{ total }})</a>
+  <span class="label">Show</span>
   {% for type, n in by_type %}
-  <a href="{{ base_url }}?type={{ type }}{{ keep_agent }}{{ keep_user }}#actions" class="chip{% if type_filter == type %} on{% endif %}">{{ type }} ({{ n }})</a>
+  <button type="button" class="chip check" data-toggle-type="{{ type }}">{{ type_label(type) }} ({{ n }})</button>
   {% endfor %}
-  {% if by_project|length > 1 %}<span class="note" style="margin-left:12px">Projects: {% for p, n in by_project %}{{ p }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+  {% if by_project|length > 1 %}<span class="note" style="margin-left:8px">Projects: {% for p, n in by_project %}{{ p }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
 </div>
 {% if by_agent|length > 1 %}
 <div class="filters screen-only">
-  <span class="note">Agent:</span>
+  <span class="label">Agent</span>
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
   <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
@@ -75,65 +94,68 @@
 {% endif %}
 {% if by_user|length > 1 %}
 <div class="filters screen-only">
-  <span class="note">User:</span>
+  <span class="label">User</span>
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
   <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
-{% if by_agent|length == 1 and by_user|length == 1 %}
-<div class="note" style="margin-bottom:6px">Agent: {{ by_agent[0][0] }} &middot; User: {{ by_user[0][0] }}. Filters for agent and user appear once there is more than one.</div>
-{% endif %}
 {% if type_filter or agent_filter or user_filter %}
-<div class="note print-only">Filtered: {% if type_filter %}type={{ type_filter }} {% endif %}{% if agent_filter %}agent={{ agent_filter }} {% endif %}{% if user_filter %}user={{ user_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions shown.</div>
+<div class="note">Filtered: {% if type_filter %}{{ type_label(type_filter) }} {% endif %}{% if agent_filter %}agent={{ agent_filter }} {% endif %}{% if user_filter %}user={{ user_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions. <a href="{{ base_url }}#actions" class="screen-only">Clear</a></div>
 {% endif %}
 
+<span id="actions"></span>
 {% if project_groups %}
 {% for project, rows in project_groups %}
-<h3>{{ project }} <span class="muted">— {{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
+<div data-group="{{ loop.index }}">
+<h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
 <table>
-  <tr><th style="width:80px">Time</th><th style="width:90px">Type</th>{% if by_agent|length > 1 or by_user|length > 1 %}<th style="width:160px">Agent / user</th>{% endif %}<th>Target</th><th style="width:100px">Reversible</th><th style="width:260px">Attribution</th></tr>
+  <tr><th style="width:84px">Time</th>{% if by_agent|length > 1 or by_user|length > 1 %}<th style="width:170px">Agent</th>{% endif %}<th>What happened</th><th style="width:130px">Category</th><th style="width:120px">Undoable?</th><th style="width:250px">Who</th></tr>
   {% for a in rows %}
-  <tr{% if a.id in alerted %} class="flagged"{% endif %}>
-    <td>{{ a.time }}</td>
-    <td>{{ a.action_type }}{% if a.id in alerted %}<div><a href="/alerts" class="pill unknown" style="text-decoration:none">needs review</a><div class="note">{{ alerted[a.id]|join(', ') }}</div></div>{% endif %}</td>
+  <tr data-type="{{ a.action_type }}"{% if a.id in alerted %} class="flagged"{% endif %}>
+    <td class="time">{{ a.time }}</td>
     {% if by_agent|length > 1 or by_user|length > 1 %}<td class="note">{{ a.agent }}<br>{{ a.user }}</td>{% endif %}
     <td>
       <div>{{ a.what }}</div>
-      <div class="mono raw">
+      <div class="raw">
       {% if a.is_long %}
       <details class="screen-only"><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>
       <pre class="full print-only">{{ a.full_target }}</pre>
       {% else %}{{ a.full_target }}{% endif %}
       </div>
       {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{{ a.artifact_link }}</div>{% endif %}
+      {% if a.id in alerted %}<div style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> <span class="note">{{ alerted[a.id]|join(', ') }}</span></div>{% endif %}
     </td>
+    <td><span class="pill type">{{ type_label(a.action_type) }}</span></td>
     <td>{{ a.reversible }}{% if a.reversible_reason %}<div class="note">{{ a.reversible_reason }}</div>{% endif %}</td>
-    <td><span class="pill {{ a.attribution }}">{{ a.attribution }}</span><div class="note">{{ a.note.split(' | ')[-1] }}</div></td>
+    <td><span class="pill {{ a.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[a.attribution] }}</span><div class="note">{{ a.note.split(' | ')[-1] }}</div></td>
   </tr>
   {% endfor %}
 </table>
+</div>
 {% endfor %}
 {% else %}
-<div class="empty">No attributed actions{% if type_filter %} of type "{{ type_filter }}"{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
+<div class="empty">No actions{% if type_filter %} in {{ type_label(type_filter) }}{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
 {% endif %}
+</section>
 
-<h2>Unknown</h2>
+<section class="card" data-section="unknown">
+<h2>Unexplained</h2>
 {% if unknown %}
-<div class="note">Actions where neither an agent log nor physical input could say who did it.</div>
+<div class="note">Actions where neither an agent's log nor keyboard activity says who did it.</div>
 <table>
-  <tr><th>Time</th><th>Type</th><th>Target</th><th>Why unknown</th></tr>
+  <tr><th style="width:84px">Time</th><th>What happened</th><th>Why unexplained</th></tr>
   {% for a in unknown %}
-  <tr>
-    <td>{{ a.time }}</td>
-    <td>{{ a.action_type }}</td>
-    <td><div>{{ a.what }}</div><div class="mono raw">{{ a.full_target }}</div></td>
-    <td class="note">{{ a.note }}</td>
+  <tr data-type="{{ a.action_type }}">
+    <td class="time">{{ a.time }}</td>
+    <td><div>{{ a.what }}</div><div class="raw">{{ a.full_target }}</div></td>
+    <td class="note">{{ a.note.split(' | ')[-1] }}</td>
   </tr>
   {% endfor %}
 </table>
 {% else %}
 <div class="empty">None.</div>
 {% endif %}
+</section>
 {% endblock %}

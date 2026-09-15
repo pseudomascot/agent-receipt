@@ -9,7 +9,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from queries import day_statement, not_covered
+from queries import day_statement, not_covered, type_words
 from store import DB_PATH, connect
 
 SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
@@ -30,7 +30,7 @@ def summary_text(s: dict, integrity: str | None = None, needs_review: int | None
         lines.append("No agent actions recorded.")
     else:
         lines.append(f"{s['total']} actions: {a['agent']} agent, {a['human']} human, {a['unknown']} unknown.")
-        lines.append("By type: " + ", ".join(f"{n} {t}" for t, n in s["by_type"]) + ".")
+        lines.append("By type: " + ", ".join(f"{n} {type_words(t, n)}" for t, n in s["by_type"]) + ".")
         lines.append("Projects: " + ", ".join(f"{p} ({n})" for p, n in s["by_project"]) + ".")
         if len(s["by_agent"]) > 1:
             lines.append("Agents: " + ", ".join(f"{a} ({n})" for a, n in s["by_agent"]) + ".")

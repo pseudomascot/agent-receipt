@@ -47,8 +47,8 @@ def test_agent_and_user_filters_appear_only_with_variety(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)
     html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
-    assert "Agent: claude-code &middot; User: marc" in html
-    assert "?agent=" not in html
+    assert "?agent=" not in html                                              # one agent: no agent chips
+    assert 'data-toggle-type="execute"' in html                              # category toggles always present
 
     db2 = tmp_path / "t2.db"
     _seed(db2, second_agent=True)
@@ -126,9 +126,9 @@ def test_day_page_type_filter(tmp_path):
     html = client.get(f"/day/{DAY}?type=execute").get_data(as_text=True)
     assert "git commit -m hi" in html
     assert "src/&lt;script&gt;" not in html                           # file_write row hidden
-    assert 'class="chip on">execute (2)' in html
-    assert 'id="actions"' in html and f'/day/{DAY}?type=file_write#actions' in html   # chips land on the Actions heading
-    assert "<b>4</b>actions" in html                                  # totals stay for the whole day
+    assert "Filtered: Commands run" in html and "2 of 4 actions" in html
+    assert 'id="actions"' in html
+    assert '<b>4</b><span class="label">actions</span>' in html       # totals stay for the whole day
     html = client.get(f"/day/{DAY}?type=bogus").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html                               # bad filter ignored
 
@@ -138,14 +138,13 @@ def test_range_week_month_all_pages(tmp_path):
     _seed(db)
     client = create_app(db).test_client()
     html = client.get("/range/2026-09-14/2026-09-13").get_data(as_text=True)   # reversed order is fine
-    assert "2026-09-13 to 2026-09-14" in html and "(2 days)" in html
-    assert "<b>5</b>actions" in html                                            # both days counted
+    assert "2026-09-13 to 2026-09-14" in html and "2 days" in html
+    assert '<b>5</b><span class="label">actions</span>' in html                 # both days counted
     assert "yesterday.html" in html and "git commit -m hi" in html
     assert 'href="/day/2026-09-13">2026-09-13</a></td><td>1</td>' in html         # by-day table
-    assert "Download CSV (5 rows)" in html                                       # export includes unknown rows
+    assert "/export.csv?start=2026-09-13&end=2026-09-14" in html
     html = client.get("/range/2026-09-13/2026-09-14?type=post").get_data(as_text=True)
     assert "yesterday.html" in html and "git commit -m hi" not in html
-    assert 'href="/range/2026-09-13/2026-09-14?type=execute' in html            # chips keep the range
     assert client.get("/week").status_code == 200
     assert client.get("/month").status_code == 200
     html = client.get("/all").get_data(as_text=True)
@@ -166,8 +165,8 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
 
     # Two alerts: the scheduled irreversible commit, and the seeded unknown-attribution row.
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
-    assert "Needs review: 2</a>" in html
-    assert '<tr class="flagged">' in html and "unattended_irreversible" in html
+    assert "2 need review</a>" in html
+    assert 'class="flagged"' in html and "unattended_irreversible" in html
     assert "Needs review: 2 open alert(s)." in html                            # summary line
 
     html = client.get("/alerts").get_data(as_text=True)
@@ -177,12 +176,12 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
 
     resp = client.post("/alerts/seen", data={"id": ids[0]})                   # newest first: the unknown row
     assert resp.status_code == 302 and resp.headers["Location"].endswith("/alerts")
-    assert "Needs review: 1</a>" in client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert "1 needs review</a>" in client.get(f"/day/{DAY}").get_data(as_text=True)
 
     client.post("/alerts/seen", data={"all": "1"})
     assert "Nothing waiting" in client.get("/alerts").get_data(as_text=True)
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
-    assert "Needs review: 0</a>" in html and 'class="flagged"' not in html
+    assert "Nothing needs review</a>" in html and 'class="flagged"' not in html
 
 
 def test_print_markup_present(tmp_path):

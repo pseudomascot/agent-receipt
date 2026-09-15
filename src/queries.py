@@ -50,6 +50,28 @@ def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None) 
 def not_covered(email_on: bool | None = None, stripe_on: bool | None = None) -> list:
     return [name for name, status, _ in coverage_notes(email_on, stripe_on) if status == "not covered"]
 ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
+TYPE_LABELS = {
+    "file_write": "File edits", "execute": "Commands run", "send_email": "Emails sent",
+    "create_event": "Calendar events", "purchase": "Purchases", "post": "Messages & posts",
+    "other": "Browser & other",
+}
+
+
+TYPE_WORDS = {
+    "file_write": ("file edit", "file edits"), "execute": ("command run", "commands run"),
+    "send_email": ("email sent", "emails sent"), "create_event": ("calendar event", "calendar events"),
+    "purchase": ("purchase", "purchases"), "post": ("message or post", "messages & posts"),
+    "other": ("browser/other action", "browser & other actions"),
+}
+
+
+def type_label(action_type: str) -> str:
+    return TYPE_LABELS.get(action_type, action_type)
+
+
+def type_words(action_type: str, n: int) -> str:
+    one, many = TYPE_WORDS.get(action_type, (action_type, action_type))
+    return one if n == 1 else many
 
 # A leading `cd "<dir>" && ` says where, which the Project column already shows.
 LEADING_CD = re.compile(r'^cd\s+("[^"]*"|\'[^\']*\'|\S+)\s*&&\s*')

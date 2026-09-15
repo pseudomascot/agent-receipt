@@ -11,7 +11,7 @@ from flask import Flask, Response, abort, redirect, render_template, request
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from doctor import status as machine_status
 from export import export_csv
-from queries import ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, statement
+from queries import ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, statement, type_label
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, summary_text
 from verify import status_line
@@ -43,14 +43,15 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         return connect(db_path)
 
     @app.context_processor
-    def _needs_review():
+    def _globals():
         conn = db()
         try:
-            return {"needs_review": unseen_count(conn)}
+            return {"needs_review": unseen_count(conn), "today": date.today().isoformat(),
+                    "type_label": type_label}
         finally:
             conn.close()
 
-    def render_statement(start: date, end: date, base_url: str):
+    def render_statement(start: date, end: date, base_url: str, nav: str = ""):
         filters = _filters()
         conn = db()
         try:
@@ -65,7 +66,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             "statement.html", coverage_notes=coverage_notes(),
             summary=summary_text(data, integrity, open_alerts),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
-            integrity=integrity, alerted=alerted, query=request.query_string.decode(), **data)
+            integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(), **data)
 
     @app.route("/")
     def index():
@@ -76,13 +77,13 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return render_template("index.html", days=days, coverage_notes=coverage_notes(),
-                               integrity=integrity, today=date.today().isoformat(),
-                               machine=machine_status(db_path))
+                               integrity=integrity, nav="index", machine=machine_status(db_path))
 
     @app.route("/day/<day_str>")
     def day_page(day_str):
         day = _parse_day(day_str)
-        return render_statement(day, day, f"/day/{day.isoformat()}")
+        return render_statement(day, day, f"/day/{day.isoformat()}",
+                                nav="today" if day == date.today() else "")
 
     @app.route("/range/<start_str>/<end_str>")
     def range_page(start_str, end_str):
@@ -94,12 +95,12 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
     @app.route("/week")
     def week_page():
         end = date.today()
-        return render_statement(end - timedelta(days=6), end, "/week")
+        return render_statement(end - timedelta(days=6), end, "/week", nav="week")
 
     @app.route("/month")
     def month_page():
         end = date.today()
-        return render_statement(end - timedelta(days=29), end, "/month")
+        return render_statement(end - timedelta(days=29), end, "/month", nav="month")
 
     @app.route("/all")
     def all_page():
@@ -108,7 +109,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             start = earliest_day(conn) or date.today()
         finally:
             conn.close()
-        return render_statement(start, date.today(), "/all")
+        return render_statement(start, date.today(), "/all", nav="all")
 
     @app.route("/alerts")
     def alerts_page():

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block body %}
-<nav><a href="/day/{{ today }}">Today</a> &nbsp;|&nbsp; <a href="/week">Last 7 days</a> &nbsp;|&nbsp; <a href="/month">Last 30 days</a> &nbsp;|&nbsp; <a href="/all">All time</a></nav>
+<div class="page-title"><h1>All days</h1><span class="sub">every day an agent did something on this Mac</span></div>
 
+<section class="card" data-section="days">
 <h2>Days with activity</h2>
-<div class="note" style="margin-bottom:8px">Human and Unknown stay 0 in v1: every action comes from an agent's own log. They fill in once email, card, or wallet sources are connected (v2).</div>
 {% if days %}
 <table>
-  <tr><th>Day</th><th>Actions</th><th>Agent</th><th>Human</th><th>Unknown</th><th>Projects</th></tr>
+  <tr><th>Day</th><th>Actions</th><th>By an agent</th><th>By a person</th><th>Unexplained</th><th>Projects</th></tr>
   {% for d in days %}
   <tr>
     <td><a href="/day/{{ d.day }}">{{ d.day }}</a></td>
@@ -18,12 +18,15 @@
   </tr>
   {% endfor %}
 </table>
+<div class="note" style="margin-top:8px">"By a person" and "unexplained" only apply to things seen through a mailbox or card; everything from an agent's own log counts as the agent's.</div>
 {% else %}
-<div class="empty">No actions recorded yet. Once "Agent Receipt.command" is running, anything your agents have done shows up here within five minutes.</div>
+<div class="empty">No actions recorded yet. Once the app is running, anything your agents have done shows up here within five minutes.</div>
 {% endif %}
+</section>
 
+<section class="card" data-section="machine">
 <h2>This machine</h2>
-<table class="compact" style="min-width:520px">
+<table class="compact" style="min-width:560px">
   {% for src in machine.sources %}
   <tr>
     <td>{{ src.label }}</td>
@@ -32,6 +35,7 @@
   {% endfor %}
   <tr><td>Agent mailbox (email + card alerts)</td><td>{% if machine.email %}<span class="pill covered">configured</span>{% else %}<span class="note">not configured — docs/EMAIL.md</span>{% endif %}</td></tr>
   <tr><td>Stripe</td><td>{% if machine.stripe %}<span class="pill covered">configured</span>{% else %}<span class="note">not configured — docs/STRIPE.md</span>{% endif %}</td></tr>
-  <tr><td>Input monitor</td><td>{% if machine.db.monitor_running %}<span class="pill covered">running</span>{% else %}<span class="pill not">not running</span> <span class="note">start "Agent Receipt.command"; needs Accessibility permission for Terminal</span>{% endif %}</td></tr>
+  <tr><td>Keyboard &amp; mouse watch</td><td>{% if machine.db.monitor_running %}<span class="pill covered">running</span>{% else %}<span class="pill not">not running</span> <span class="note">open Agent Receipt.app; it needs the Accessibility permission</span>{% endif %}</td></tr>
 </table>
+</section>
 {% endblock %}

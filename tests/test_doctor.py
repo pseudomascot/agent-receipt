@@ -56,5 +56,5 @@ def test_front_page_shows_machine_status(tmp_path):
     connect(db).close()
     html = create_app(db).test_client().get("/").get_data(as_text=True)
     assert "This machine" in html
-    assert "Input monitor" in html and "not running" in html
+    assert "Keyboard &amp; mouse watch" in html and "not running" in html
     assert "Claude Code" in html

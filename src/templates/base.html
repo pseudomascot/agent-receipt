@@ -5,70 +5,142 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Agent Receipt{% endblock %}</title>
 <style>
-  :root { color-scheme: light; }
-  body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; background: #fafaf8; color: #1a1a1a; max-width: 1100px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  h2 { font-size: 15px; margin: 28px 0 8px; text-transform: uppercase; letter-spacing: .04em; color: #555; }
-  a { color: #1d4ed8; }
-  .muted { color: #666; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e5e5e0; vertical-align: top; }
-  th { font-weight: 600; color: #444; background: #f1f1ec; }
-  td.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; word-break: break-all; max-width: 520px; }
-  .raw { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #777; word-break: break-all; max-width: 520px; margin-top: 2px; }
-  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .agent { background: #dbeafe; color: #1e3a8a; }
-  .human { background: #dcfce7; color: #14532d; }
-  .unknown { background: #fef3c7; color: #78350f; }
-  .covered { background: #dcfce7; color: #14532d; }
-  .partial { background: #fef3c7; color: #78350f; }
-  .not { background: #fee2e2; color: #7f1d1d; }
-  .totals { display: flex; gap: 24px; flex-wrap: wrap; }
-  .totals div { background: #fff; border: 1px solid #e5e5e0; border-radius: 8px; padding: 10px 14px; min-width: 120px; }
-  .totals b { font-size: 20px; display: block; }
-  .note { font-size: 12px; color: #666; }
-  nav { margin: 6px 0 18px; }
-  .empty { padding: 14px; background: #fff; border: 1px dashed #ccc; border-radius: 8px; color: #666; }
-  pre.summary { background: #fff; border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; margin: 0 0 6px; }
-  h3 { font-size: 14px; margin: 22px 0 6px; }
-  h2#actions { scroll-margin-top: 12px; }
-  html { scroll-behavior: auto; }
-  .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
-  .chip { display: inline-block; padding: 3px 10px; border: 1px solid #d4d4cf; border-radius: 999px; background: #fff; color: #333; text-decoration: none; font-size: 12px; }
-  .chip.on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
-  button.chip { cursor: pointer; font: inherit; font-size: 12px; }
-  tr.flagged td { background: #fffbeb; }
+  :root {
+    color-scheme: light;
+    --bg: #f5f4f0; --card: #ffffff; --line: #e6e4de; --line-soft: #f0eee9;
+    --text: #1c1c1e; --muted: #6e6d6a; --faint: #9a9994;
+    --accent: #4f46e5; --accent-soft: #eef0ff;
+    --agent-bg: #e3ecff; --agent-fg: #1e3a8a;
+    --human-bg: #dcf5e6; --human-fg: #14532d;
+    --unknown-bg: #fdefc8; --unknown-fg: #78350f;
+    --bad-bg: #fde4e1; --bad-fg: #7f1d1d;
+    --shadow: 0 1px 2px rgba(20,20,20,.04), 0 6px 20px rgba(20,20,20,.05);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  b, strong { font-weight: 600; }
+
+  header.top { position: sticky; top: 0; z-index: 10; background: rgba(245,244,240,.86); backdrop-filter: saturate(160%) blur(10px);
+    border-bottom: 1px solid var(--line); }
+  .top-inner { max-width: 1140px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .wordmark { font-weight: 700; font-size: 17px; letter-spacing: -.01em; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .wordmark:hover { text-decoration: none; }
+  .wordmark .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+  nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav.tabs a { padding: 6px 12px; border-radius: 999px; color: var(--muted); font-weight: 500; font-size: 14px; }
+  nav.tabs a:hover { background: var(--line-soft); text-decoration: none; color: var(--text); }
+  nav.tabs a.on { background: var(--text); color: #fff; }
+  .badge { margin-left: auto; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+  .badge.alert { background: var(--unknown-bg); color: var(--unknown-fg); }
+  .badge.clear { background: var(--human-bg); color: var(--human-fg); }
+  .badge:hover { text-decoration: none; filter: brightness(.97); }
+
+  main { max-width: 1140px; margin: 0 auto; padding: 22px 24px 60px; }
+  .page-title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 6px 0 14px; }
+  .page-title h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+  .page-title .sub { color: var(--muted); }
+  .page-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .btn:hover { border-color: #cfcdc6; text-decoration: none; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px 20px; margin: 0 0 16px; }
+  section.card > h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  section.card h3 { font-size: 15px; font-weight: 600; margin: 18px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+  section.card h3 .muted { font-weight: 400; }
+  .muted { color: var(--muted); }
+  .note { font-size: 13px; color: var(--muted); }
+  .empty { padding: 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fbfaf8; }
+  .tile b { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 4px; }
+  .tile span.label { font-size: 13px; color: var(--muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint);
+    padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: #fbfaf8; }
+  td.time { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  .raw { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; color: var(--faint); word-break: break-all; max-width: 560px; margin-top: 3px; }
+  td.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; word-break: break-all; }
+  table.compact { width: auto; min-width: 280px; }
+  tr.flagged td { background: #fff8e6; }
+
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.agent { background: var(--agent-bg); color: var(--agent-fg); }
+  .pill.human { background: var(--human-bg); color: var(--human-fg); }
+  .pill.unknown { background: var(--unknown-bg); color: var(--unknown-fg); }
+  .pill.covered { background: var(--human-bg); color: var(--human-fg); }
+  .pill.partial { background: var(--unknown-bg); color: var(--unknown-fg); }
+  .pill.not { background: var(--bad-bg); color: var(--bad-fg); }
+  .pill.type { background: var(--line-soft); color: var(--muted); font-weight: 500; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
+  .filters .label { font-size: 12px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; font-family: inherit; user-select: none; }
+  .chip:hover { border-color: #cfcdc6; text-decoration: none; }
+  .chip.on { background: var(--text); color: #fff; border-color: var(--text); }
+  .chip.check { padding-left: 9px; }
+  .chip.check::before { content: "✓"; font-size: 11px; opacity: .9; }
+  .chip.check.off { color: var(--faint); background: transparent; }
+  .chip.check.off::before { content: "○"; }
+  button.chip { font: inherit; font-size: 13px; }
+  .hidden { display: none !important; }
+
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
-  details summary::before { content: "▸ "; color: #888; }
+  details summary::before { content: "▸ "; color: var(--faint); }
   details[open] summary::before { content: "▾ "; }
   pre.full { white-space: pre-wrap; margin: 6px 0 0; padding: 8px; background: #f6f6f2; border-radius: 6px; font-size: 12px; }
-  table.compact { width: auto; min-width: 260px; }
+  pre.summary { font: 13.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; background: #fbfaf8; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; white-space: pre-wrap; margin: 0 0 6px; }
   .print-only { display: none; }
+
+  @media (max-width: 700px) { .top-inner, main { padding-left: 14px; padding-right: 14px; } td, th { padding: 8px 6px; } }
   @media print {
-    body { padding: 0; background: #fff; color: #000; font-size: 11px; max-width: none; }
-    .screen-only, nav, .filters, details.screen-only { display: none !important; }
+    body { background: #fff; color: #000; font-size: 11px; }
+    header.top, .screen-only, .filters, .page-actions, details.screen-only { display: none !important; }
+    main { max-width: none; padding: 0; }
+    section.card { box-shadow: none; border: 0; padding: 0; margin: 0 0 14px; break-inside: avoid; }
     .print-only { display: block; }
     pre.full.print-only { background: none; padding: 0; margin: 0; border: 0; font-size: 10px; }
     .pill { border: 1px solid #999; background: none !important; color: #000 !important; }
-    .totals div { border-color: #999; box-shadow: none; }
-    th { background: #eee !important; }
-    tr, .totals div, pre.summary { break-inside: avoid; page-break-inside: avoid; }
-    h2 { break-after: avoid; page-break-after: avoid; }
-    a { color: #000; text-decoration: none; }
+    .tile { border-color: #999; }
+    tr, .tile, pre.summary { break-inside: avoid; page-break-inside: avoid; }
+    a { color: #000; }
     @page { margin: 14mm; }
   }
 </style>
 </head>
 <body>
-<h1><a href="/" style="text-decoration:none;color:inherit">Agent Receipt</a>
-  <a href="/alerts" class="pill {{ 'unknown' if needs_review else 'covered' }} screen-only" style="font-size:12px;vertical-align:middle;text-decoration:none;margin-left:10px">Needs review: {{ needs_review or 0 }}</a></h1>
-<div class="muted">A statement of every side-effect action an AI agent took on this machine. Local only.</div>
+<header class="top"><div class="top-inner">
+  <a class="wordmark" href="/"><span class="mark">🧾</span>Agent Receipt</a>
+  <nav class="tabs">
+    <a href="/day/{{ today or '' }}"{% if nav == 'today' %} class="on"{% endif %}>Today</a>
+    <a href="/week"{% if nav == 'week' %} class="on"{% endif %}>Last 7 days</a>
+    <a href="/month"{% if nav == 'month' %} class="on"{% endif %}>Last 30 days</a>
+    <a href="/all"{% if nav == 'all' %} class="on"{% endif %}>All time</a>
+    <a href="/"{% if nav == 'index' %} class="on"{% endif %}>All days</a>
+  </nav>
+  <a href="/alerts" class="badge {{ 'alert' if needs_review else 'clear' }}">{% if needs_review %}{{ needs_review }} need{{ 's' if needs_review == 1 else '' }} review{% else %}Nothing needs review{% endif %}</a>
+</div></header>
+<main>
 {% block body %}{% endblock %}
 
+<section class="card" data-section="coverage">
 <h2>What this receipt covers</h2>
 <table>
-  <tr><th style="width:38%">Source</th><th style="width:12%">Status</th><th>Detail</th></tr>
+  <tr><th style="width:40%">Source</th><th style="width:12%">Status</th><th>Detail</th></tr>
   {% for name, status, detail in coverage_notes %}
   <tr>
     <td>{{ name }}</td>
@@ -79,7 +151,54 @@
 </table>
 {% if integrity %}
 <div class="note" style="margin-top:10px; white-space: pre-line">{{ integrity }}
-This proves the transcripts were not altered after the receipt read them; it cannot prove they were honest at that moment.</div>
+This proves the logs were not altered after the receipt read them; it cannot prove they were honest at that moment.</div>
 {% endif %}
+</section>
+</main>
+<script>
+(function () {
+  var store = { get: function (k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } },
+                set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+  // Section toggles: chips with data-toggle-section="<name>" show/hide [data-section="<name>"].
+  var hiddenSections = store.get("ar.hiddenSections") || [];
+  function applySections() {
+    document.querySelectorAll("[data-section]").forEach(function (el) {
+      el.classList.toggle("hidden", hiddenSections.indexOf(el.getAttribute("data-section")) >= 0);
+    });
+    document.querySelectorAll("[data-toggle-section]").forEach(function (chip) {
+      chip.classList.toggle("off", hiddenSections.indexOf(chip.getAttribute("data-toggle-section")) >= 0);
+    });
+  }
+  document.querySelectorAll("[data-toggle-section]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var name = chip.getAttribute("data-toggle-section"), i = hiddenSections.indexOf(name);
+      if (i >= 0) hiddenSections.splice(i, 1); else hiddenSections.push(name);
+      store.set("ar.hiddenSections", hiddenSections); applySections();
+    });
+  });
+  // Category toggles: chips with data-toggle-type="<type>" show/hide rows [data-type="<type>"] and empty groups.
+  var hiddenTypes = store.get("ar.hiddenTypes") || [];
+  function applyTypes() {
+    document.querySelectorAll("tr[data-type]").forEach(function (row) {
+      row.classList.toggle("hidden", hiddenTypes.indexOf(row.getAttribute("data-type")) >= 0);
+    });
+    document.querySelectorAll("[data-group]").forEach(function (group) {
+      var visible = group.querySelectorAll("tr[data-type]:not(.hidden)").length;
+      group.classList.toggle("hidden", visible === 0);
+    });
+    document.querySelectorAll("[data-toggle-type]").forEach(function (chip) {
+      chip.classList.toggle("off", hiddenTypes.indexOf(chip.getAttribute("data-toggle-type")) >= 0);
+    });
+  }
+  document.querySelectorAll("[data-toggle-type]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var t = chip.getAttribute("data-toggle-type"), i = hiddenTypes.indexOf(t);
+      if (i >= 0) hiddenTypes.splice(i, 1); else hiddenTypes.push(t);
+      store.set("ar.hiddenTypes", hiddenTypes); applyTypes();
+    });
+  });
+  applySections(); applyTypes();
+})();
+</script>
 </body>
 </html>

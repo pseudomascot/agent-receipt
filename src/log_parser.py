@@ -644,7 +644,7 @@ def reconcile(conn: sqlite3.Connection):
             updates.append((rebuilt["reversible"], new_note, action_id))
     conn.executemany("DELETE FROM actions WHERE id = ?", doomed)
     conn.executemany("UPDATE actions SET reversible = ?, confidence_note = ? WHERE id = ?", updates)
-    conn.execute("UPDATE actions SET user = ? WHERE user IS NULL", (current_user(),))
+    conn.execute("UPDATE actions SET user = ? WHERE user IS NULL OR user = ''", (current_user(),))
     conn.commit()
     return len(doomed), len(updates)
 
