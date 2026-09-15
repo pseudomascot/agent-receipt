@@ -1,22 +1,29 @@
 """Calendar connector: events created, changed, or deleted in the macOS Calendar app.
 
-Reads through Apple's EventKit, which already holds whatever calendars the Mac
-syncs (iCloud, Google, Exchange…). Local, read-only, one macOS permission
-prompt. Opt-in: RECEIPT_CALENDAR=on in .env.
+Reads through the Calendar app's AppleScript interface (osascript), which
+covers whatever calendars the Mac syncs (iCloud, Google, Exchange…). Local and
+read-only. macOS asks once whether Agent Receipt may control Calendar
+("Automation" permission). Opt-in: RECEIPT_CALENDAR=on in .env.
+
+Why not EventKit: on current macOS, EventKit silently refuses a Python process
+that is not a signed app with a usage description in its own Info.plist — no
+prompt, no error. AppleScript prompts the way Terminal scripts do.
 
 What becomes a row (source 'calendar'):
-- a new event      -> create_event, timestamped by the event's creation time
+- a new event      -> create_event (Calendar exposes no creation time, so it is
+                      timestamped when first seen; polls run every 5 minutes)
 - a changed event  -> other ("changed a calendar event")
 - a deleted event  -> other ("deleted a calendar event"), irreversible
 Attribution is left to the correlator; a receipt line declaring the same id
-(cal:<event identifier>) merges in and makes it the agent's.
+(cal:<event uid>) merges in and makes it the agent's.
 
-The EventKit part is isolated in `read_events`; `sync` works on plain dicts so
-it can be tested without a calendar.
+The AppleScript part is isolated in `read_events`; `sync` works on plain dicts
+so it can be tested without a calendar.
 """
 
 import json
 import sqlite3
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -25,71 +32,86 @@ from config import calendar_settings
 
 PAST_DAYS = 30
 FUTURE_DAYS = 365
-AUTHORIZED = (3, 4)   # EKAuthorizationStatusFullAccess / (write-only on older SDKs)
+OSASCRIPT_TIMEOUT = 180
+# Subscribed/system calendars nobody's agent writes to. Overridden by RECEIPT_CALENDARS.
+DEFAULT_SKIP = {"Holidays in United States", "US Holidays", "Birthdays", "Siri Suggestions",
+                "Scheduled Reminders"}
+RS, FS = "\x1e", "\x1f"   # record / field separators inside the script's output
 
 
-def authorization_status():
-    try:
-        from EventKit import EKEntityTypeEvent, EKEventStore
-        return int(EKEventStore.authorizationStatusForEntityType_(EKEntityTypeEvent))
-    except Exception:
-        return None
+class CalendarAccessError(RuntimeError):
+    pass
 
 
-def request_access(timeout: float = 60.0) -> bool:
-    """Ask macOS for calendar access (shows the system prompt once). Blocks until answered."""
-    from EventKit import EKEntityTypeEvent, EKEventStore
-    if authorization_status() == 3:
-        return True
-    store = EKEventStore.alloc().init()
-    result = {}
-
-    def done(granted, error):
-        result["granted"] = bool(granted)
-
-    if hasattr(store, "requestFullAccessToEventsWithCompletion_"):
-        store.requestFullAccessToEventsWithCompletion_(done)
+def _script(calendar_names) -> str:
+    if calendar_names:
+        names = ", ".join('"' + n.replace('"', '\\"') + '"' for n in calendar_names)
+        guard = f"if cname is in {{{names}}} then"
     else:
-        store.requestAccessToEntityType_completion_(EKEntityTypeEvent, done)
-    waited = 0.0
-    while "granted" not in result and waited < timeout:
-        time.sleep(0.2)
-        waited += 0.2
-    return result.get("granted", False)
+        skip = ", ".join('"' + n + '"' for n in sorted(DEFAULT_SKIP))
+        guard = f"if cname is not in {{{skip}}} then"
+    return f"""
+    set RS to character id 30
+    set FS to character id 31
+    tell application "Calendar"
+      set now to current date
+      set lo to now - {PAST_DAYS} * days
+      set hi to now + {FUTURE_DAYS} * days
+      set out to ""
+      repeat with c in calendars
+        set cname to name of c
+        {guard}
+          set evs to (every event of c whose start date ≥ lo and start date ≤ hi)
+          repeat with e in evs
+            set loc to ""
+            try
+              set loc to location of e
+              if loc is missing value then set loc to ""
+            end try
+            set out to out & (uid of e) & FS & (summary of e) & FS & (((start date of e) - now) as string) & FS & (((end date of e) - now) as string) & FS & (allday event of e) & FS & cname & FS & loc & FS & (((stamp date of e) - now) as string) & RS
+          end repeat
+        end if
+      end repeat
+      return out
+    end tell
+    """
+
+
+def parse_events(output: str, now: float) -> list[dict]:
+    """Turn the script's delimited output into event dicts (offsets are relative to `now`)."""
+    events = []
+    for rec in output.split(RS):
+        parts = rec.split(FS)
+        if len(parts) < 8 or not parts[0].strip():
+            continue
+        uid, title, start, end, all_day, calendar, location, modified = parts[:8]
+
+        def rel(v):
+            try:
+                return now + float(v)
+            except ValueError:
+                return None
+
+        events.append({
+            "id": uid.strip(), "title": title or "(no title)", "start": rel(start), "end": rel(end),
+            "all_day": all_day.strip().lower() == "true", "calendar": calendar, "location": location or None,
+            "attendees": [], "created": None, "modified": rel(modified),
+        })
+    return events
 
 
 def read_events(calendar_names=None) -> list[dict]:
-    """Every event in the watched window, as plain dicts."""
-    from EventKit import EKEntityTypeEvent, EKEventStore
-    from Foundation import NSDate
-    store = EKEventStore.alloc().init()
-    calendars = store.calendarsForEntityType_(EKEntityTypeEvent) or []
-    if calendar_names:
-        wanted = {n.strip().lower() for n in calendar_names}
-        calendars = [c for c in calendars if str(c.title()).lower() in wanted]
-    if not calendars:
-        return []
+    """Every event in the watched window, as plain dicts, via the Calendar app."""
     now = time.time()
-    start = NSDate.dateWithTimeIntervalSince1970_(now - PAST_DAYS * 86400)
-    end = NSDate.dateWithTimeIntervalSince1970_(now + FUTURE_DAYS * 86400)
-    predicate = store.predicateForEventsWithStartDate_endDate_calendars_(start, end, calendars)
-    out = []
-    for ev in store.eventsMatchingPredicate_(predicate) or []:
-        def ts(d):
-            return float(d.timeIntervalSince1970()) if d is not None else None
-        out.append({
-            "id": str(ev.eventIdentifier()),
-            "title": str(ev.title() or "(no title)"),
-            "start": ts(ev.startDate()),
-            "end": ts(ev.endDate()),
-            "all_day": bool(ev.isAllDay()),
-            "calendar": str(ev.calendar().title()) if ev.calendar() else "",
-            "location": str(ev.location()) if ev.location() else None,
-            "attendees": [str(a.name() or a.URL()) for a in (ev.attendees() or [])],
-            "created": ts(ev.creationDate()),
-            "modified": ts(ev.lastModifiedDate()),
-        })
-    return out
+    proc = subprocess.run(["osascript", "-"], input=_script(calendar_names), capture_output=True,
+                          text=True, timeout=OSASCRIPT_TIMEOUT)
+    if proc.returncode != 0:
+        err = proc.stderr.strip()
+        if "-1743" in err or "not allowed" in err.lower() or "Not authorized" in err:
+            raise CalendarAccessError("Agent Receipt is not allowed to control Calendar "
+                                      "(System Settings → Privacy & Security → Automation)")
+        raise RuntimeError(err or f"osascript exited {proc.returncode}")
+    return parse_events(proc.stdout, now)
 
 
 def _when(ev: dict) -> str:
@@ -128,7 +150,7 @@ def sync(conn: sqlite3.Connection, settings: dict, events: list[dict], user: str
                 stamp = ev.get("created") or now
                 before = conn.total_changes
                 conn.execute(INSERT, (stamp, agent, user, "create_event", label, 1,
-                                      f"created in calendar '{ev['calendar']}'; reversibility: the event can be deleted",
+                                      f"appeared in calendar '{ev['calendar']}'; reversibility: the event can be deleted",
                                       raw, f"cal:{ev['id']}"))
                 counts["created"] += conn.total_changes - before
         elif ev.get("modified") and prior[3] and ev["modified"] > prior[3] + 1:
@@ -168,9 +190,10 @@ def sync_if_configured(conn: sqlite3.Connection, user: str = "") -> dict | None:
     if not settings:
         return None
     try:
-        if authorization_status() != 3 and not request_access(timeout=1):
-            return {"error": "calendar access not granted"}
         return sync(conn, settings, read_events(settings["calendars"]), user=user)
+    except CalendarAccessError as exc:
+        print(f"[calendar] {exc}", file=sys.stderr)
+        return {"error": str(exc)}
     except Exception as exc:
         print(f"[calendar] sync failed: {exc!r}; will retry next refresh", file=sys.stderr)
         return {"error": repr(exc)}
@@ -182,7 +205,9 @@ if __name__ == "__main__":
     if not settings:
         print("Not configured: set RECEIPT_CALENDAR=on in .env (docs/CALENDAR.md).")
         sys.exit(1)
-    print("calendar access:", "granted" if request_access() else "NOT granted (System Settings → Privacy & Security → Calendars)")
+    started = time.time()
+    events = read_events(settings["calendars"])
+    print(f"read {len(events)} event(s) in {time.time() - started:.1f}s")
     conn = connect()
-    print(sync(conn, settings, read_events(settings["calendars"])))
+    print(sync(conn, settings, events))
     conn.close()

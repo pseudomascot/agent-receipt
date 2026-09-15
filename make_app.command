@@ -22,6 +22,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>AgentReceipt</string>
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>NSAppleEventsUsageDescription</key><string>Agent Receipt asks the Calendar app for events that were created, changed, or deleted. It never writes to your calendar.</string>
   <key>NSHumanReadableCopyright</key><string>MIT License</string>
 </dict>
 </plist>

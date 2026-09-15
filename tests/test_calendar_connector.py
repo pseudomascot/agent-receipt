@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from calendar_connector import sync  # noqa: E402
+from calendar_connector import FS, RS, _script, parse_events, sync  # noqa: E402
 from config import calendar_settings  # noqa: E402
 from correlator import correlate  # noqa: E402
 from describe import describe  # noqa: E402
@@ -74,6 +74,17 @@ def test_attribution_and_declaration(tmp_path):
     assert ingest_all(conn, (replace(INBOX, root=inbox),)) == 0
     assert conn.execute("SELECT source, attribution, agent FROM actions").fetchone() == ("log", "agent", "booking-bot")
     conn.close()
+
+
+def test_parse_events_and_script():
+    out = FS.join(["ABC-1", "Dentist, 2pm", "3600", "7200", "false", "Work", "", "-60"]) + RS \
+        + FS.join(["ABC-2", "Trip", "86400", "172800", "true", "Home", "Paris", "-5"]) + RS + "junk" + RS
+    events = parse_events(out, 1000.0)
+    assert [e["id"] for e in events] == ["ABC-1", "ABC-2"]
+    assert events[0]["title"] == "Dentist, 2pm" and events[0]["start"] == 4600.0 and events[0]["modified"] == 940.0
+    assert events[1]["all_day"] is True and events[1]["location"] == "Paris" and events[1]["created"] is None
+    assert 'if cname is not in {"Birthdays"' in _script(None)
+    assert 'if cname is in {"Work", "Agent Receipt Test"}' in _script(["Work", "Agent Receipt Test"])
 
 
 def test_settings_and_migration(tmp_path):
