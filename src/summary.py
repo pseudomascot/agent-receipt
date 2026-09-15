@@ -18,10 +18,20 @@ SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "summaries"
 def build_summary(conn: sqlite3.Connection, day: date) -> str:
     from alerts import unseen_count
     from verify import status_line
-    return summary_text(day_statement(conn, day), status_line(conn), unseen_count(conn))
+    return summary_text(day_statement(conn, day), status_line(conn), unseen_count(conn), agent_names(conn))
 
 
-def summary_text(s: dict, integrity: str | None = None, needs_review: int | None = None) -> str:
+def agent_names(conn) -> dict:
+    """raw label -> plain name (nickname if the person gave one), for the summary's Agents line."""
+    from agents import display, known_identities, nicknames
+    nicks, known = nicknames(conn), known_identities()
+    labels = [r[0] for r in conn.execute("SELECT DISTINCT agent FROM actions")]
+    return {a: display(a, nicks, known)["name"] for a in labels}
+
+
+def summary_text(s: dict, integrity: str | None = None, needs_review: int | None = None,
+                 names: dict | None = None) -> str:
+    names = names or {}
     """Plain-text summary of a statement dict (a day or a range)."""
     a = s["by_attribution"]
     lines = [f"Agent Receipt — {s.get('label', s['day'])}"]
@@ -33,7 +43,7 @@ def summary_text(s: dict, integrity: str | None = None, needs_review: int | None
         lines.append("By type: " + ", ".join(f"{n} {type_words(t, n)}" for t, n in s["by_type"]) + ".")
         lines.append("Projects: " + ", ".join(f"{p} ({n})" for p, n in s["by_project"]) + ".")
         if len(s["by_agent"]) > 1:
-            lines.append("Agents: " + ", ".join(f"{a} ({n})" for a, n in s["by_agent"]) + ".")
+            lines.append("Agents: " + ", ".join(f"{names.get(a, a)} ({n})" for a, n in s["by_agent"]) + ".")
         if len(s["by_user"]) > 1:
             lines.append("Users: " + ", ".join(f"{u} ({n})" for u, n in s["by_user"]) + ".")
         if s["money"]:

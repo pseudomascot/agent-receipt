@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS agent_status (
     by_user TEXT
 );
 
+-- Names people give their agents ("Bookkeeping bot"). Shown everywhere; the raw label stays as the subtitle.
+CREATE TABLE IF NOT EXISTS agent_names (
+    agent TEXT PRIMARY KEY,
+    nickname TEXT NOT NULL,
+    set_at REAL NOT NULL,
+    by_user TEXT
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

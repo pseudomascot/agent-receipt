@@ -8,7 +8,8 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, redirect, render_template, request
 
-from agents import history as agent_history, list_agents, restore, retire
+from agents import display as agent_display_fn
+from agents import history as agent_history, known_identities, list_agents, nicknames, restore, retire, set_nickname
 from agents import retired as retired_agents
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from doctor import status as machine_status
@@ -17,7 +18,7 @@ from log_parser import current_user
 from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
                      statement, type_label)
 from store import DB_PATH, connect
-from summary import SUMMARIES_DIR, summary_text
+from summary import SUMMARIES_DIR, agent_names, summary_text
 from verify import status_line
 
 HOST = "127.0.0.1"
@@ -50,8 +51,10 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
     def _globals():
         conn = db()
         try:
+            nicks, known = nicknames(conn), known_identities()
             return {"needs_review": unseen_count(conn), "today": date.today().isoformat(),
-                    "type_label": type_label}
+                    "type_label": type_label,
+                    "agent_display": lambda name: agent_display_fn(name, nicks, known)}
         finally:
             conn.close()
 
@@ -64,12 +67,13 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             alerted = unseen_action_ids(conn, day_bounds(start)[0], day_bounds(end)[1])
             open_alerts = unseen_count(conn)
             retired = retired_agents(conn)
+            names = agent_names(conn)
         finally:
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
         return render_template(
             "statement.html", coverage_notes=coverage_notes(),
-            summary=summary_text(data, integrity, open_alerts),
+            summary=summary_text(data, integrity, open_alerts, names),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
             integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(),
             retired=retired, **data)
@@ -183,6 +187,16 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
                 (retire if action == "retire" else restore)(conn, agent, current_user(), note)
             finally:
                 conn.close()
+        return redirect("/agents")
+
+    @app.route("/agents/name", methods=["POST"])
+    def agents_name():
+        agent = (request.form.get("agent") or "").strip()
+        conn = db()
+        try:
+            set_nickname(conn, agent, request.form.get("nickname") or "", current_user())
+        finally:
+            conn.close()
         return redirect("/agents")
 
     @app.route("/alerts")

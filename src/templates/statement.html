@@ -66,7 +66,7 @@
   <span class="label">Agent</span>
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}">{% if ' / ' in agent %}↳ {% endif %}{{ agent }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
@@ -80,7 +80,7 @@
 </div>
 {% endif %}
 {% if type_filter or agent_filter or user_filter %}
-<div class="note">Filtered: {% if type_filter %}{{ type_label(type_filter) }} {% endif %}{% if agent_filter %}agent={{ agent_filter }} {% endif %}{% if user_filter %}user={{ user_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions. <a href="{{ base_url }}#actions" class="screen-only">Clear</a></div>
+<div class="note">Filtered: {% if type_filter %}{{ type_label(type_filter) }} {% endif %}{% if agent_filter %}agent: {{ agent_display(agent_filter).name }} {% endif %}{% if user_filter %}user={{ user_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions. <a href="{{ base_url }}#actions" class="screen-only">Clear</a></div>
 {% endif %}
 
 <span id="actions"></span>
@@ -90,11 +90,11 @@
 <div data-group="{{ loop.index }}">
 <h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
 <table>
-  <tr><th style="width:84px">Time</th>{% if by_agent|length > 1 or by_user|length > 1 %}<th style="width:170px">Agent</th>{% endif %}<th>What happened</th><th style="width:130px">Category</th><th style="width:120px">Undoable?</th><th style="width:250px">Who</th></tr>
+  <tr><th style="width:84px">Time</th><th style="width:190px">Who did it</th><th>What happened</th><th style="width:130px">Category</th><th style="width:120px">Undoable?</th><th style="width:250px">Who</th></tr>
   {% for a in rows %}
   <tr data-type="{{ a.action_type }}"{% if a.id in alerted %} class="flagged"{% endif %}>
     <td class="time">{{ a.time }}</td>
-    {% if by_agent|length > 1 or by_user|length > 1 %}<td class="note">{{ a.agent }}{% if ' / ' in a.agent %} <span class="pill type" title="A worker started by the agent named before the slash">sub-agent</span>{% endif %}<br>{{ a.user }}</td>{% endif %}
+    {% set d = agent_display(a.agent) %}<td><div>{{ d.name }}</div><div class="note">{{ d.sub }}{% if by_user|length > 1 %} · {{ a.user }}{% endif %}</div><span class="pill type" title="{{ a.agent }}">{{ d.kind }}</span></td>
     <td>
       <div>{{ a.what }}</div>
       <div class="raw">

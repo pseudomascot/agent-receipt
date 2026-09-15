@@ -18,7 +18,7 @@
   <tr>
     <td><input type="checkbox" name="id" value="{{ i.id }}"></td>
     <td class="time"><a href="/day/{{ i.day }}">{{ i.time }}</a></td>
-    <td class="note">{{ i.agent }}<br>{{ i.project }}</td>
+    {% set d = agent_display(i.agent) %}<td><div>{{ d.name }}</div><div class="note">{{ d.sub }}</div><div class="note">{{ i.project }}</div></td>
     <td><div>{{ i.what }}</div>
       <div class="raw">{{ i.target[:300] }}{% if i.target|length > 300 %}&hellip;{% endif %}</div>
       {% if i.reason %}<div class="note">{{ i.reason }}</div>{% endif %}</td>

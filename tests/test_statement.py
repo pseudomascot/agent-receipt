@@ -233,6 +233,7 @@ def test_subagent_rows_are_tagged(tmp_path):
     conn.commit()
     conn.close()
     html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
-    assert "↳ claude-code / Explore: tidy tests (1)" in html                     # chip marks the worker
-    assert 'title="A worker started by the agent named before the slash">sub-agent</span>' in html
-    assert html.count(">sub-agent</span>") == 1                                  # only the worker's row
+    assert 'title="claude-code / Explore: tidy tests">Sub-agent of Claude Code (1)</a>' in html   # plain-named chip
+    assert "<div>Sub-agent of Claude Code</div>" in html and "tidy tests" in html
+    assert html.count(">sub-agent</span>") == 1                                  # kind pill only on the worker's row
+    assert html.count(">local agent</span>") >= 3 and "<div>Claude Code</div>" in html

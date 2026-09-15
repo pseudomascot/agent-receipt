@@ -66,6 +66,70 @@ def kind_of(name: str, known: dict) -> tuple[str, str]:
     return "declared", "declares its own actions through the receipt-line inbox"
 
 
+ENTRYPOINTS = {"claude-desktop": "in the Claude app", "cli": "in the Terminal"}
+
+
+def nicknames(conn: sqlite3.Connection) -> dict:
+    return dict(conn.execute("SELECT agent, nickname FROM agent_names").fetchall())
+
+
+def set_nickname(conn: sqlite3.Connection, agent: str, nickname: str, user: str) -> int | None:
+    """Name an agent (empty nickname clears it). Recorded on the receipt like every other button."""
+    nickname = " ".join((nickname or "").split())[:60]
+    if not agent:
+        return None
+    current = nicknames(conn).get(agent, "")
+    if nickname == current:
+        return None
+    now = time.time()
+    if nickname:
+        conn.execute("INSERT OR REPLACE INTO agent_names (agent, nickname, set_at, by_user) VALUES (?, ?, ?, ?)",
+                     (agent, nickname, now, user))
+    else:
+        conn.execute("DELETE FROM agent_names WHERE agent = ?", (agent,))
+    return _record(conn, "name", agent, user, nickname, now)
+
+
+def display(name: str, nicks: dict | None = None, known: dict | None = None) -> dict:
+    """Plain-English identity for a raw agent label.
+
+    {"name": what to print, "sub": one line under it, "kind": pill text, "raw": the label, "nickname": ""|str}
+    A nickname the person chose wins; the generated plain name then becomes the subtitle."""
+    nicks = nicks or {}
+    known = known if known is not None else known_identities()
+    kind, what = kind_of(name, known)
+    pretty, sub = _plain(name, kind, what, known)
+    nick = nicks.get(name)
+    if nick:
+        return {"name": nick, "sub": pretty if pretty != name else what, "kind": kind, "raw": name, "nickname": nick}
+    return {"name": pretty, "sub": sub, "kind": kind, "raw": name, "nickname": ""}
+
+
+def _plain(name: str, kind: str, what: str, known: dict) -> tuple[str, str]:
+    if name == RECEIPT_AGENT:
+        return "Agent Receipt", "a button you pressed in the app"
+    base, _, rest = name.partition(" / ")
+    head, _, paren = base.partition(" (")
+    paren = paren[:-1] if paren.endswith(")") else paren
+    if head == "google calendar" and paren:
+        return "Google account", paren
+    if name in known:
+        return name, what
+    if head == "claude-code":
+        where = ENTRYPOINTS.get(paren, paren)
+        if rest:
+            role, _, task = rest.partition(": ")
+            return "Sub-agent of Claude Code", (task or role) + (f" · {where}" if where else "")
+        return "Claude Code", where
+    if head == "cowork":
+        if "scheduled" in paren:
+            return "Cowork · scheduled task", "runs on a schedule with nobody present"
+        return "Cowork", "in the Claude app"
+    if head == "codex":
+        return "Codex (OpenAI)", paren
+    return name, what
+
+
 def _fmt(ts) -> str:
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else ""
 
@@ -80,6 +144,7 @@ def list_agents(conn: sqlite3.Connection, env: dict | None = None) -> list[dict]
     """One entry per identity: observed agents, configured-but-quiet ones, and retired ones."""
     known = known_identities(env)
     status = retired(conn)
+    nicks = nicknames(conn)
     stats = {}
     for name, total, first, last, users, irreversible, money in conn.execute(
         "SELECT agent, COUNT(*), MIN(timestamp), MAX(timestamp), GROUP_CONCAT(DISTINCT user), "
@@ -102,8 +167,9 @@ def list_agents(conn: sqlite3.Connection, env: dict | None = None) -> list[dict]
     for name in set(stats) | set(known) | set(status):
         s = stats.get(name)
         kind, what = kind_of(name, known)
+        d = display(name, nicks, known)
         out.append({
-            "name": name, "kind": kind, "what": what,
+            "name": name, "kind": kind, "what": what, "label": d["name"], "sub": d["sub"], "nickname": d["nickname"],
             "users": sorted(u for u in (s["users"].split(",") if s else []) if u),
             "first_seen": _fmt(s["first"]) if s else "", "last_seen": _fmt(s["last"]) if s else "",
             "last_ts": s["last"] if s else 0,
@@ -135,9 +201,13 @@ def restore(conn: sqlite3.Connection, agent: str, user: str, note: str = "") -> 
 
 
 def _record(conn, event: str, agent: str, user: str, note: str, now: float) -> int:
-    verb = {"retire": "Retired", "restore": "Restored"}[event]
-    target = f"{verb} agent: {agent}" + (f" — {note}" if note else "")
-    reason = "can be restored from the Agents page" if event == "retire" else "can be retired again"
+    verb = {"retire": "Retired", "restore": "Restored", "name": "Named"}[event]
+    if event == "name":
+        target = f"Named agent: {agent} → “{note}”" if note else f"Cleared the name of agent: {agent}"
+        reason = "can be renamed again"
+    else:
+        target = f"{verb} agent: {agent}" + (f" — {note}" if note else "")
+        reason = "can be restored from the Agents page" if event == "retire" else "can be retired again"
     cur = conn.execute(INSERT, (
         now, RECEIPT_AGENT, user, "input", "other", target, 1, "human",
         f"the {event} button was pressed in Agent Receipt; reversibility: {reason}",

@@ -22,6 +22,31 @@ retired on its own. The spawn itself appears on the parent's statement as
 "Started a sub-agent: …", so a worker's rows always have a parent. Other
 frameworks name their workers through the inbox.
 
+## How an agent is shown
+Raw labels (`claude-code (claude-desktop)`, `codex (codex_work_desktop)`)
+are only meaningful if you know how those tools name themselves, so every
+page prints a plain name with the detail underneath and a kind badge:
+
+| Raw label | Shown as | Underneath | Kind |
+|---|---|---|---|
+| `claude-code (claude-desktop)` | Claude Code | in the Claude app | local agent |
+| `claude-code (cli)` | Claude Code | in the Terminal | local agent |
+| `claude-code (…) / Explore: tidy the tests` | Sub-agent of Claude Code | tidy the tests · in the Claude app | sub-agent |
+| `cowork (scheduled task)` | Cowork · scheduled task | runs on a schedule with nobody present | local agent |
+| `codex (codex_work_desktop)` | Codex (OpenAI) | codex_work_desktop | local agent |
+| `google calendar (x@gmail.com)` | Google account | x@gmail.com | google account |
+| the label you set for a mailbox / Stripe connector | as you set it | its own mailbox, x@… / a Stripe account | mailbox / card |
+| anything from the inbox | as declared | declares its own actions through the receipt-line inbox | declared |
+
+**Name it yourself.** On the Agents page each row has a name box. Type
+"Bookkeeping bot" and Save: that name is then used on every statement, in
+the daily summary, on Needs review, and in the CSV (column `agent_label`,
+next to the raw `agent`). The raw label stays visible underneath and in
+the export, so nothing is hidden by the friendly name. Naming is recorded on
+the receipt like the other buttons.
+
+The "Who did it" column is always shown, even on a day with a single agent.
+
 ## The Agents page
 `http://127.0.0.1:8765/agents` lists every identity: what it is, which users
 it ran under, first and last seen, how many actions (and how many can't be

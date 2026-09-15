@@ -56,8 +56,11 @@ stay inside this folder; `make_app.command` rebuilds it.
   net — and a three-column **QuickBooks / Xero** file your bookkeeper matches
   against the bank feed (`docs/BOOKKEEPING.md`). The receipt does not file
   taxes; it tells the bookkeeper who spent the money and why.
-- **Agents:** every identity that has acted — what it is, first/last seen,
-  counts, open alerts — with a **Retire** switch. Retiring never removes
+- **Agents:** every identity that has acted, in plain names ("Claude Code",
+  "Sub-agent of Claude Code", "Cowork · scheduled task", "Google account")
+  with a kind badge and the raw label underneath; give any of them your own
+  name ("Bookkeeping bot") and it is used everywhere. Each has first/last
+  seen, counts, open alerts, and a **Retire** switch. Retiring never removes
   history; it records the decision on the receipt and flags anything the
   agent does afterwards (`docs/AGENTS.md`).
 - **Coverage**, on every page: what is and isn't being watched. A receipt with

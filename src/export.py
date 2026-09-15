@@ -12,7 +12,7 @@ from datetime import datetime
 
 from queries import coverage_notes
 
-COLUMNS = ["timestamp", "date", "time", "agent", "user", "project", "action_type", "what", "target",
+COLUMNS = ["timestamp", "date", "time", "agent", "agent_label", "user", "project", "action_type", "what", "target",
            "reversible", "reversible_reason", "attribution", "attribution_note",
            "artifact_link", "amount", "currency", "source_ref"]
 
@@ -45,9 +45,11 @@ def export_csv(conn, stats: dict, filters: dict) -> str:
 
 
 def _rows(conn, stats: dict):
+    from agents import display, known_identities, nicknames
     ids = [a["id"] for a in stats["shown"]]
     if not ids:
         return []
+    nicks, known = nicknames(conn), known_identities()
     placeholders = ",".join("?" * len(ids))
     full = {r[0]: r[1] for r in conn.execute(
         f"SELECT id, target FROM actions WHERE id IN ({placeholders})", ids)}
@@ -56,7 +58,7 @@ def _rows(conn, stats: dict):
         when = datetime.fromtimestamp(a["timestamp"])
         out.append([
             when.isoformat(timespec="seconds"), when.date().isoformat(), when.strftime("%H:%M:%S"),
-            a["agent"], a["user"], a["project"], a["action_type"], a.get("what", ""), full.get(a["id"], a["target"]),
+            a["agent"], display(a["agent"], nicks, known)["name"], a["user"], a["project"], a["action_type"], a.get("what", ""), full.get(a["id"], a["target"]),
             a["reversible"], a["reversible_reason"], a["attribution"], a["note"].split(" | ")[-1],
             a["artifact_link"] or "", a["amount"] if a["amount"] is not None else "",
             a["currency"] or "", a.get("source_ref") or "",

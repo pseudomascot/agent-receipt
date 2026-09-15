@@ -50,7 +50,7 @@
     <td><div>{{ r.what }}</div>
       {% if r.artifact_link and r.artifact_link.startswith('http') %}<div class="note"><a href="{{ r.artifact_link }}" target="_blank" rel="noopener">Open ↗</a></div>{% endif %}
       {% if r.source_ref %}<div class="raw">ref {{ r.source_ref }}</div>{% endif %}</td>
-    <td class="note">{{ r.agent }}{% if r.project and not r.project.startswith('(') %}<br>{{ r.project }}{% endif %}</td>
+    {% set d = agent_display(r.agent) %}<td><div>{{ d.name }}</div><div class="note">{{ d.sub }}{% if r.project and not r.project.startswith('(') %} · {{ r.project }}{% endif %}</div></td>
     <td><span class="pill {{ r.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[r.attribution] }}</span></td>
     <td style="text-align:right; font-variant-numeric: tabular-nums; white-space: nowrap">{% if r.direction == 'out' %}{{ '%.2f'|format(r.amount) }} {{ r.currency }}{% endif %}</td>
     <td style="text-align:right; font-variant-numeric: tabular-nums; white-space: nowrap">{% if r.direction == 'in' %}{{ '%.2f'|format(r.amount) }} {{ r.currency }}{% endif %}</td>

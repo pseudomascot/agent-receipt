@@ -10,6 +10,7 @@
 <div class="note" style="margin-bottom:12px">
   Identities come from the agents' own logs, from credentials the receipt reads (a mailbox, a card, a Google account),
   or from what an agent declares through the inbox — they are observed, not issued.
+  Give an agent a name of your own ("Bookkeeping bot") and that name is used on every statement, alert and export; the log's own label stays underneath.
   <b>Retire</b> says "from now on this agent is not supposed to act": nothing it did is removed or hidden,
   its rows stay on every statement, and anything it does afterwards is flagged for review.
   Retiring does not stop the agent — that takes revoking its mailbox, card or account at the issuer.
@@ -19,7 +20,14 @@
   <tr><th>Agent</th><th>What it is</th><th style="width:110px">First seen</th><th style="width:110px">Last seen</th><th style="width:210px">Actions</th><th style="width:100px">Needs review</th><th style="width:250px">Status</th></tr>
   {% for a in agents %}
   <tr{% if a.retired %} class="retired"{% endif %}>
-    <td><b>{{ a.name }}</b>{% if a.users %}<div class="note">{{ a.users|join(', ') }}</div>{% endif %}</td>
+    <td><b>{{ a.label }}</b>
+      <div class="note">{{ a.sub }}{% if a.users %} · {{ a.users|join(', ') }}{% endif %}</div>
+      {% if a.name != a.label %}<div class="raw" title="The label in the agent's own log">{{ a.name }}</div>{% endif %}
+      <form method="post" action="/agents/name" class="screen-only" style="margin-top:6px; display:flex; gap:6px">
+        <input type="hidden" name="agent" value="{{ a.name }}">
+        <input type="text" name="nickname" value="{{ a.nickname }}" placeholder="give it a name" maxlength="60" style="flex:1; min-width:100px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
+        <button type="submit" class="btn">Save</button>
+      </form></td>
     <td><span class="pill type">{{ a.kind }}</span><div class="note">{{ a.what }}</div></td>
     <td class="time">{{ a.first_seen or '—' }}</td>
     <td class="time">{{ a.last_seen or '—' }}</td>
@@ -54,7 +62,7 @@
 </section>
 
 <section class="card" data-section="changes">
-<h2>Retire / restore history</h2>
+<h2>Retire / restore / naming history</h2>
 {% if changes %}
 <div class="note">Each press is itself a line on the receipt, attributed to the person who pressed it.</div>
 <table class="compact" style="min-width:520px; margin-top:8px">

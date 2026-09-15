@@ -101,7 +101,7 @@ def test_agents_page_and_form(tmp_path):
     assert resp.status_code == 302 and resp.headers["Location"].endswith("/agents")
     html = client.get("/agents").get_data(as_text=True)
     assert 'class="retired"' in html and "Retired agent: claude-code — noisy" in html and "Restore" in html
-    assert "claude-code · retired" in client.get("/day/2026-09-14").get_data(as_text=True)   # chip label
+    assert "Claude Code · retired" in client.get("/day/2026-09-14").get_data(as_text=True)   # chip label
     day = client.get(f"/day/{datetime.now().date().isoformat()}").get_data(as_text=True)
     assert "Retired agent: claude-code" in day                                   # the press is on the statement
 
@@ -111,3 +111,46 @@ def test_agents_page_and_form(tmp_path):
     client.post("/agents/status", data={"agent": "", "action": "retire"})      # ignored
     client.post("/agents/status", data={"agent": "claude-code", "action": "bogus"})
     assert not retired(connect(db))
+
+
+def test_display_names():
+    from agents import display
+    known = known_identities(ENV)
+    assert display("claude-code (claude-desktop)", {}, known) == {
+        "name": "Claude Code", "sub": "in the Claude app", "kind": "local agent", "raw": "claude-code (claude-desktop)", "nickname": ""}
+    assert display("claude-code (cli)", {}, known)["sub"] == "in the Terminal"
+    d = display("claude-code (claude-desktop) / general-purpose: Write-one-file test sub-agent", {}, known)
+    assert d["name"] == "Sub-agent of Claude Code" and d["sub"] == "Write-one-file test sub-agent · in the Claude app" and d["kind"] == "sub-agent"
+    assert display("cowork (scheduled task)", {}, known)["name"] == "Cowork · scheduled task"
+    assert display("cowork", {}, known) == {"name": "Cowork", "sub": "in the Claude app", "kind": "local agent", "raw": "cowork", "nickname": ""}
+    assert display("codex (codex_work_desktop)", {}, known)["name"] == "Codex (OpenAI)"
+    assert display("google calendar (bot@example.com)", {}, known) == {
+        "name": "Google account", "sub": "bot@example.com", "kind": "google account", "raw": "google calendar (bot@example.com)", "nickname": ""}
+    assert display("mailbox bot@example.com", {}, known)["sub"] == "its own mailbox, bot@example.com"
+    assert display(RECEIPT_AGENT, {}, known)["name"] == "Agent Receipt"
+    assert display("my-bot", {}, known) == {"name": "my-bot", "sub": "declares its own actions through the receipt-line inbox", "kind": "declared", "raw": "my-bot", "nickname": ""}
+    nick = display("mailbox bot@example.com", {"mailbox bot@example.com": "Bookkeeping bot"}, known)
+    assert nick["name"] == "Bookkeeping bot" and nick["sub"] == "its own mailbox, bot@example.com" and nick["nickname"] == "Bookkeeping bot"
+    nick = display("claude-code (claude-desktop)", {"claude-code (claude-desktop)": "Coder"}, known)
+    assert nick["name"] == "Coder" and nick["sub"] == "Claude Code"
+
+
+def test_nickname_flows_everywhere(tmp_path):
+    from agents import set_nickname
+    db = tmp_path / "t.db"
+    conn = _seed(db)
+    assert set_nickname(conn, "mailbox bot@example.com", "  Bookkeeping   bot ", "marc")
+    assert set_nickname(conn, "mailbox bot@example.com", "Bookkeeping bot", "marc") is None      # unchanged: no row
+    assert history(conn)[0]["event"] == "name" and "Bookkeeping bot" in history(conn)[0]["what"]
+    conn.close()
+    client = create_app(db).test_client()
+    day = client.get("/day/2026-09-14").get_data(as_text=True)
+    assert "<div>Bookkeeping bot</div>" in day and "Bookkeeping bot (1)" in day                   # row + chip
+    assert "Agents: Cowork · scheduled task (1), Claude Code (2), Bookkeeping bot (1)." in day or "Bookkeeping bot (1)." in day
+    csv_text = client.get("/export.csv?start=2026-09-14&end=2026-09-14").get_data(as_text=True)
+    assert "mailbox bot@example.com,Bookkeeping bot,sam" in csv_text                              # raw + label columns
+    html = client.get("/agents").get_data(as_text=True)
+    assert "<b>Bookkeeping bot</b>" in html and 'value="Bookkeeping bot"' in html
+    client.post("/agents/name", data={"agent": "mailbox bot@example.com", "nickname": ""})        # clear
+    assert "Bookkeeping bot" not in client.get("/day/2026-09-14").get_data(as_text=True)
+    assert "Cleared the name of agent: mailbox bot@example.com" in client.get("/agents").get_data(as_text=True)
