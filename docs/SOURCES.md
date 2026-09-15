@@ -24,6 +24,19 @@ Filled in during session 1 (2026-09-14), on Marc's Mac.
     name identifies both the source and the action
   - Excluded (reads, not side effects): `Read`, `Glob`, `Grep`, `TodoWrite`
     (local-only), `AskUserQuestion`, `ExitPlanMode`
+- **Sub-agents (verified 2026-09-15 by spawning one read-only test agent):**
+  a sub-agent's work is NOT in the parent's file. It gets its own transcript at
+  `<project>/<session-uuid>/subagents/agent-<agentId>.jsonl`, same line format,
+  every line flagged `"isSidechain": true` with `agentId`, `sessionId` = the
+  parent session, `cwd`, and `attributionAgent` (the agent type) on assistant
+  lines. A sidecar `agent-<agentId>.meta.json` holds `agentType`,
+  `description` (the parent's one-line label for the task), `toolUseId` (the
+  parent's `Agent` tool_use id), `spawnDepth`. The parent's transcript has the
+  `Agent` tool_use (input: `description`, `prompt`, `subagent_type`) and a
+  result carrying `agentId`. The receipt therefore labels a worker
+  `claude-code (<entrypoint>) / <agentType>: <description>` and records the
+  spawn itself as "Started a sub-agent". Before today no sub-agent had ever
+  run on this Mac (all 10,999 lines had `isSidechain: false`).
 - Note: this machine runs Claude Code both standalone and embedded inside the
   Claude desktop app's "Code" tab — both write to the exact same location in
   the exact same format. Confirmed by tracing this very session's process

@@ -41,7 +41,7 @@ def test_known_identities_and_kinds():
     assert "secret" not in str(known)                                              # no secrets in labels
     assert kind_of("claude-code", known)[0] == "local agent"
     assert "schedule" in kind_of("cowork (scheduled task)", known)[1]
-    assert kind_of("claude-code / worker-3", known)[0] == "local agent"
+    assert kind_of("claude-code / worker-3", known)[0] == "sub-agent"
     assert kind_of("my-bot", known)[0] == "declared"
 
 

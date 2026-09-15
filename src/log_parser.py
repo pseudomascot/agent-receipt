@@ -32,7 +32,7 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "8"
+RULES_VERSION = "9"
 
 ACTION_TYPES = {"send_email", "create_event", "purchase", "file_write", "post", "execute", "other"}
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
@@ -117,12 +117,35 @@ def _tool_use_calls(entry: dict, meta: dict) -> list:
     return calls
 
 
-def _claude_code_agent(entry: dict, _meta: dict) -> str:
+def _claude_code_agent(entry: dict, meta: dict) -> str:
+    """`claude-code (<entrypoint>)`, plus ` / <role>: <task>` for a sub-agent's own transcript."""
     entrypoint = entry.get("entrypoint")
     name = f"claude-code ({entrypoint})" if entrypoint else "claude-code"
-    if entry.get("isSidechain"):
-        name += " › subagent"
+    if entry.get("isSidechain") or entry.get("agentId") or meta.get("agentType"):
+        role = meta.get("agentType") or entry.get("attributionAgent") or "subagent"
+        task = " ".join(str(meta.get("description") or "").split())
+        if task:
+            name += f" / {role}: {task[:48]}"
+        else:
+            name += f" / {role} {str(entry.get('agentId') or '')[:8]}".rstrip()
     return name
+
+
+def _claude_code_meta(path: Path) -> dict:
+    """A sub-agent transcript (<session>/subagents/agent-<id>.jsonl) has a sidecar
+    agent-<id>.meta.json with agentType, description, toolUseId, spawnDepth."""
+    if path.parent.name != "subagents":
+        return {}
+    meta = {"parent_session": path.parent.parent.name}
+    sidecar = path.with_name(path.stem + ".meta.json")
+    try:
+        with open(sidecar, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            meta.update({k: data[k] for k in ("agentType", "description", "toolUseId", "spawnDepth") if k in data})
+    except (OSError, ValueError):
+        pass
+    return meta
 
 
 def _cowork_agent(_entry: dict, meta: dict) -> str:
@@ -258,7 +281,7 @@ CLAUDE_CODE = Source(
     extract=_tool_use_calls,
     agent_name=_claude_code_agent,
     timestamp=lambda e: e.get("timestamp"),
-    session_meta=lambda _p: {},
+    session_meta=_claude_code_meta,
     line_hint='"tool_use"',
 )
 COWORK = Source(
@@ -323,6 +346,11 @@ def classify(name: str, tool_input: dict):
             return None
         target = tool_input.get("url") or tool_input.get("file_path")
         return "post", target, tool_input.get("url")
+    if name == "Agent":
+        # Spawning a sub-agent is recorded so the worker's own rows have a parent on the receipt.
+        role = tool_input.get("subagent_type") or "agent"
+        task = " ".join(str(tool_input.get("description") or "").split())
+        return "other", _clip(f"{role}: {task}" if task else role), None
     if name.startswith("mcp__"):
         tool = name.split("__", 2)[-1]
         if tool in UI_ONLY_MCP_TOOLS or tool.startswith(MCP_READ_PREFIXES):
@@ -401,7 +429,7 @@ def _base_note(source_name: str, session_id, reason, declared=False) -> str:
 
 
 def build_action(call: Call, source_name: str, timestamp: float, agent: str, user: str,
-                 path: Path | None, entry: dict | None = None) -> dict | None:
+                 path: Path | None, entry: dict | None = None, meta: dict | None = None) -> dict | None:
     """Turn a Call into an `actions` row dict, or None if it is not a side effect."""
     classified = classify(call.name, call.input)
     if classified is None:
@@ -417,6 +445,7 @@ def build_action(call: Call, source_name: str, timestamp: float, agent: str, use
     elif o.get("reason"):
         reason = f"{o['reason']}; {reason}" if reason else o["reason"]
     entry = entry or {}
+    meta = meta or {}
     return {
         "timestamp": timestamp,
         "agent": o.get("agent", agent),
@@ -441,6 +470,9 @@ def build_action(call: Call, source_name: str, timestamp: float, agent: str, use
             "source": source_name,
             "entrypoint": entry.get("entrypoint"),
             "sidechain": bool(entry.get("isSidechain")),
+            "agent_id": entry.get("agentId"),
+            "parent_session": meta.get("parent_session"),
+            "spawned_by": meta.get("toolUseId"),
             "version": entry.get("version"),
         }),
         "source_ref": call.call_id,
@@ -473,7 +505,7 @@ def parse_lines(path: Path, lines, source: Source = CLAUDE_CODE):
         project = meta.get("title")
         for idx, call in enumerate(calls):
             call.call_id = call.call_id or f"{path.name}:{pos}:{idx}"
-            action = build_action(call, source.name, timestamp, agent, user, path, entry)
+            action = build_action(call, source.name, timestamp, agent, user, path, entry, meta)
             if action is None:
                 continue
             if project:

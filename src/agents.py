@@ -55,6 +55,8 @@ def kind_of(name: str, known: dict) -> tuple[str, str]:
         return known[name]
     base = name.split(" (", 1)[0].split(" / ", 1)[0]
     if base in LOCAL_HARNESSES:
+        if " / " in name:
+            return "sub-agent", f"a worker started by {LOCAL_HARNESSES[base]}, read from its own transcript"
         what = f"{LOCAL_HARNESSES[base]} on this Mac, read from its own log"
         if "(scheduled task)" in name:
             what += "; runs on a schedule with nobody present"

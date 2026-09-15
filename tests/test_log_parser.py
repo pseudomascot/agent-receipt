@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from log_parser import (CODEX, COWORK, INBOX, RULES_VERSION, classify, current_user, ingest,  # noqa: E402
+from log_parser import (CODEX, COWORK, INBOX, RULES_VERSION, classify, current_user, find_transcripts, ingest,  # noqa: E402
                         ingest_all, parse_file, reconcile)
 from dataclasses import replace  # noqa: E402
 from store import connect  # noqa: E402
@@ -398,9 +398,42 @@ def test_agent_name_variants(tmp_path):
         _assistant("Write", {"file_path": "/c"}, "t3", isSidechain=True),
     ])
     names = [a["agent"] for a in parse_file(path)]
-    assert names == ["claude-code", "claude-code (cli)", "claude-code (claude-desktop) › subagent"]
+    assert names == ["claude-code", "claude-code (cli)", "claude-code (claude-desktop) / subagent"]
     raw = json.loads(list(parse_file(path))[2]["raw_json"])
     assert raw["sidechain"] is True and raw["entrypoint"] == "claude-desktop"
+
+
+def test_subagent_transcript_gets_its_own_identity(tmp_path):
+    # Layout verified on this Mac: <project>/<session>/subagents/agent-<id>.jsonl + agent-<id>.meta.json
+    project = tmp_path / "-Users-marc-proj"
+    parent = project / "sess-1.jsonl"
+    project.mkdir()
+    _write_transcript(parent, [
+        _assistant("Agent", {"description": "Read-only   test sub-agent", "prompt": "…", "subagent_type": "Explore"}, "toolu_spawn"),
+    ])
+    sub_dir = project / "sess-1" / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-ac4bd87f.meta.json").write_text(json.dumps(
+        {"agentType": "Explore", "description": "Read-only test sub-agent", "toolUseId": "toolu_spawn", "spawnDepth": 1}))
+    _write_transcript(sub_dir / "agent-ac4bd87f.jsonl", [
+        _assistant("Read", {"file_path": "/x"}, "t_read", isSidechain=True, agentId="ac4bd87f", attributionAgent="Explore"),
+        _assistant("Write", {"file_path": "/tmp/proj/out.txt"}, "t_write", isSidechain=True, agentId="ac4bd87f", attributionAgent="Explore"),
+    ])
+
+    spawn = list(parse_file(parent))
+    assert len(spawn) == 1 and spawn[0]["action_type"] == "other" and spawn[0]["target"] == "Explore: Read-only test sub-agent"
+    assert spawn[0]["agent"] == "claude-code (claude-desktop)"
+
+    worker = list(parse_file(sub_dir / "agent-ac4bd87f.jsonl"))
+    assert [a["source_ref"] for a in worker] == ["t_write"]                       # the Read is not a side effect
+    assert worker[0]["agent"] == "claude-code (claude-desktop) / Explore: Read-only test sub-agent"
+    raw = json.loads(worker[0]["raw_json"])
+    assert raw["agent_id"] == "ac4bd87f" and raw["parent_session"] == "sess-1" and raw["spawned_by"] == "toolu_spawn"
+    assert find_transcripts(project) and any(p.name == "agent-ac4bd87f.jsonl" for p in find_transcripts(project))
+
+    # No sidecar: still a distinct worker, named by role and id.
+    (sub_dir / "agent-ac4bd87f.meta.json").unlink()
+    assert list(parse_file(sub_dir / "agent-ac4bd87f.jsonl"))[0]["agent"] == "claude-code (claude-desktop) / Explore ac4bd87f"
 
 
 def test_raw_json_caps_long_strings(tmp_path):

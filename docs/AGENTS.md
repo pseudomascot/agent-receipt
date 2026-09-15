@@ -12,9 +12,15 @@ is one of:
 - **A declaration** — any agent that appends receipt lines to
   `~/.agent-receipt/inbox/` names itself (`docs/RECEIPT_LINE.md`).
 
-Sub-agents inside one harness (a swarm of Claude Code workers) are not yet
-told apart; they appear under the parent's label. A framework that wants its
-workers listed separately can declare them through the inbox today.
+**Sub-agents are told apart.** When Claude Code spawns a worker, the worker
+writes its own transcript (`<session>/subagents/agent-<id>.jsonl`, verified
+on this Mac — see `docs/SOURCES.md`). The receipt reads it and labels the
+worker `claude-code (<entrypoint>) / <role>: <task>` — for example
+`claude-code (claude-desktop) / Explore: Read-only test sub-agent` — so each
+worker is its own row on the Agents page and can be filtered, reviewed and
+retired on its own. The spawn itself appears on the parent's statement as
+"Started a sub-agent: …", so a worker's rows always have a parent. Other
+frameworks name their workers through the inbox.
 
 ## The Agents page
 `http://127.0.0.1:8765/agents` lists every identity: what it is, which users
