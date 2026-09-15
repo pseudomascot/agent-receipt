@@ -19,7 +19,7 @@
 </div>
 {% if agents %}
 <table class="agents">
-  <tr><th>Agent</th><th style="width:118px">What it is</th><th style="width:96px">First seen</th><th style="width:96px">Last seen</th><th style="width:84px; text-align:right">Actions</th><th style="width:70px; text-align:right">Review</th><th style="width:150px">Status</th><th style="width:88px"></th></tr>
+  <tr><th>Agent</th><th style="width:110px">What it is</th><th style="width:92px">First seen</th><th style="width:92px">Last seen</th><th style="width:70px; text-align:right">Actions</th><th style="width:62px; text-align:right">Review</th><th style="width:128px">Status</th><th style="width:78px"></th></tr>
   {% for a in agents %}
   {% set breakdown = [] %}{% for t, n in a.by_type|dictsort(by='value', reverse=true) %}{% set _ = breakdown.append(type_label(t)|lower ~ ' ' ~ n) %}{% endfor %}
   <tr class="agent-row{% if a.retired %} retired{% endif %}" data-agent-row>
@@ -104,7 +104,7 @@
 <style>
   table.agents td { padding: 8px 10px; }
   table.agents tr.agent-row td { cursor: default; }
-  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
   .btn.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; }
   tr.details td { background: var(--line-soft); border-bottom: 1px solid var(--line); }
   .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
