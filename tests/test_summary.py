@@ -34,6 +34,7 @@ def test_build_summary_text(tmp_path, monkeypatch):
     monkeypatch.setattr("config.stripe_configured", lambda: False)
     monkeypatch.setattr("config.calendar_configured", lambda: False)
     monkeypatch.setattr("config.google_calendar_configured", lambda: False)
+    monkeypatch.setattr("config.ramp_configured", lambda: False)
     conn = _seed(tmp_path / "t.db")
     text = build_summary(conn, DAY)
     assert text.splitlines() == [
