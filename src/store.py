@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS actions (
     timestamp REAL NOT NULL,
     agent TEXT NOT NULL,
     user TEXT,
-    source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet')),
+    source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet', 'calendar')),
     action_type TEXT NOT NULL CHECK (action_type IN
         ('send_email', 'create_event', 'purchase', 'file_write', 'post', 'execute', 'other')),
     target TEXT,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS actions (
 -- and the statement must say so rather than imply "nothing happened".
 CREATE TABLE IF NOT EXISTS coverage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet')),
+    source TEXT NOT NULL CHECK (source IN ('log', 'input', 'email', 'card', 'wallet', 'calendar')),
     started_at REAL NOT NULL,
     ended_at REAL NOT NULL
 );
@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_unseen ON alerts (seen_at);
 
+-- What the calendar connector saw last time, so it can tell new from changed from deleted.
+CREATE TABLE IF NOT EXISTS calendar_seen (
+    identifier TEXT PRIMARY KEY,
+    title TEXT,
+    start REAL,
+    modified REAL,
+    calendar TEXT,
+    last_seen REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -95,8 +105,24 @@ def connect(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Add columns that older databases lack. CREATE TABLE IF NOT EXISTS won't."""
+    """Bring older databases up to date. CREATE TABLE IF NOT EXISTS won't."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(actions)")}
     if "user" not in columns:
         conn.execute("ALTER TABLE actions ADD COLUMN user TEXT")
         conn.commit()
+    # SQLite cannot alter a CHECK constraint; rebuild the table if a new source value is missing.
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'actions'").fetchone()[0]
+    if "'calendar'" not in sql:
+        body = SCHEMA.split("CREATE TABLE IF NOT EXISTS actions")[1].split(";")[0]
+        old_columns = [row[1] for row in conn.execute("PRAGMA table_info(actions)")]
+        conn.executescript(f"CREATE TABLE actions_new{body};")
+        new_columns = [row[1] for row in conn.execute("PRAGMA table_info(actions_new)")]
+        shared = ", ".join(c for c in new_columns if c in old_columns)
+        conn.executescript(f"""
+            BEGIN;
+            INSERT INTO actions_new ({shared}) SELECT {shared} FROM actions;
+            DROP TABLE actions;
+            ALTER TABLE actions_new RENAME TO actions;
+            COMMIT;
+        """)
+        conn.executescript(SCHEMA)

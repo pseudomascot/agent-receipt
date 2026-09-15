@@ -66,3 +66,16 @@ def stripe_settings(env: dict | None = None) -> dict | None:
 
 def stripe_configured() -> bool:
     return stripe_settings() is not None
+
+
+def calendar_settings(env: dict | None = None) -> dict | None:
+    """macOS Calendar watching, or None unless RECEIPT_CALENDAR=on."""
+    env = env if env is not None else load_env()
+    if (env.get("RECEIPT_CALENDAR") or "").strip().lower() not in ("on", "1", "true", "yes"):
+        return None
+    names = [n.strip() for n in (env.get("RECEIPT_CALENDARS") or "").split(",") if n.strip()]
+    return {"calendars": names or None, "agent": env.get("RECEIPT_CALENDAR_AGENT") or "calendar"}
+
+
+def calendar_configured() -> bool:
+    return calendar_settings() is not None

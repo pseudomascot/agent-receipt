@@ -52,6 +52,10 @@ def _describe_file(tool, path, cwd, extra):
 
 def _describe_other(tool, target, extra):
     short = tool.split("__", 2)[-1] if tool.startswith("mcp__") else tool
+    if tool == "calendar:changed":
+        return f"Changed a calendar event: {_short(target.replace('Changed: ', '', 1))}"
+    if tool == "calendar:deleted":
+        return f"Deleted a calendar event: {_short(target.replace('Deleted: ', '', 1))}"
     if short == "navigate":
         return f"Opened a web page: {_short(target)}"
     if short == "javascript_tool":

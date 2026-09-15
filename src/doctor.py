@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from config import email_configured, stripe_configured
+from config import calendar_configured, email_configured, stripe_configured
 from log_parser import SOURCES, find_transcripts
 from store import DB_PATH
 
@@ -71,6 +71,7 @@ def status(db_path: Path = DB_PATH, sources=SOURCES) -> dict:
         "sources": found,
         "email": email_configured(),
         "stripe": stripe_configured(),
+        "calendar": calendar_configured(),
         "accessibility": accessibility_granted(),
         "db": db,
     }
@@ -97,6 +98,7 @@ def report(s: dict) -> str:
     lines.append(f"  {'✓' if s['email'] else '·'} Agent mailbox (email + card alerts): "
                  f"{'configured' if s['email'] else 'not configured — docs/EMAIL.md'}")
     lines.append(f"  {'✓' if s['stripe'] else '·'} Stripe: {'configured' if s['stripe'] else 'not configured — docs/STRIPE.md'}")
+    lines.append(f"  {'✓' if s.get('calendar') else '·'} Calendar: {'on' if s.get('calendar') else 'off — set RECEIPT_CALENDAR=on (docs/CALENDAR.md)'}")
     lines.append("")
     acc = s["accessibility"]
     if acc is True:
