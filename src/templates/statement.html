@@ -1,5 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Agent Receipt — {{ label }}{% endblock %}
+{% block toolbar %}
+<div class="toolbar screen-only">
+  <span class="label">View</span>
+  <button type="button" class="chip check" data-toggle-section="summary">Summary</button>
+  <button type="button" class="chip check" data-toggle-section="totals">Totals</button>
+  <button type="button" class="chip check" data-toggle-section="actions">Actions</button>
+  {% if not single_day %}<button type="button" class="chip check" data-toggle-section="byday">By day</button>{% endif %}
+  <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
+  <button type="button" class="chip check" data-toggle-section="unknown">Unexplained</button>
+  <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
+</div>
+{% endblock %}
 {% block body %}
 {% set keep_agent = ('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '' %}
 {% set keep_user = ('&user=' ~ (user_filter|urlencode)) if user_filter else '' %}
@@ -17,17 +29,6 @@
   {% endif %}
   <a class="btn" href="/export.csv?start={{ start }}&end={{ end }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}">Download CSV</a>
   <a class="btn" href="#" onclick="window.print();return false">Print</a>
-</div>
-
-<div class="filters screen-only">
-  <span class="label">View</span>
-  <button type="button" class="chip check" data-toggle-section="summary">Summary</button>
-  <button type="button" class="chip check" data-toggle-section="totals">Totals</button>
-  <button type="button" class="chip check" data-toggle-section="actions">Actions</button>
-  {% if not single_day %}<button type="button" class="chip check" data-toggle-section="byday">By day</button>{% endif %}
-  <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
-  <button type="button" class="chip check" data-toggle-section="unknown">Unexplained</button>
-  <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
 </div>
 
 <section class="card" data-section="summary">

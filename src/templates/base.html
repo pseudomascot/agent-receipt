@@ -39,6 +39,8 @@
   .badge.alert { background: var(--unknown-bg); color: var(--unknown-fg); }
   .badge.clear { background: var(--human-bg); color: var(--human-fg); }
   .badge:hover { text-decoration: none; filter: brightness(.97); }
+  .toolbar { max-width: 1140px; margin: 0 auto; padding: 0 24px 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .toolbar .label { font-size: 12px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
 
   main { max-width: 1140px; margin: 0 auto; padding: 22px 24px 60px; }
   .page-title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 6px 0 14px; }
@@ -157,7 +159,7 @@
     <a href="/"{% if nav == 'index' %} class="on"{% endif %}>All days</a>
   </nav>
   <a href="/alerts" class="badge {{ 'alert' if needs_review else 'clear' }}">{% if needs_review %}{{ needs_review }} need{{ 's' if needs_review == 1 else '' }} review{% else %}Nothing needs review{% endif %}</a>
-</div></header>
+</div>{% block toolbar %}{% endblock %}</header>
 <main>
 {% block body %}{% endblock %}
 
