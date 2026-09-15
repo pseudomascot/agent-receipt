@@ -632,6 +632,11 @@ def reconcile(conn: sqlite3.Connection):
         tool_input = data.get("input") if isinstance(data.get("input"), dict) else {}
         if "chars total]" in json.dumps(tool_input):
             continue
+        # Only rows that came from a transcript source are re-judged here. Rows
+        # attributed by credential (e.g. the agent's own Google account) carry
+        # source='log' too but were never classified from a tool call.
+        if data.get("source") is not None and data.get("source") not in {s.name for s in SOURCES}:
+            continue
         call = Call(data.get("tool") or "", tool_input, None, data.get("session_id"), data.get("cwd"),
                     data.get("overrides") if isinstance(data.get("overrides"), dict) else {})
         rebuilt = build_action(call, data.get("source") or "claude-code", timestamp, agent, user, None)

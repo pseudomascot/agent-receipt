@@ -84,6 +84,7 @@
 {% endif %}
 
 <span id="actions"></span>
+<div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
 {% if project_groups %}
 {% for project, rows in project_groups %}
 <div data-group="{{ loop.index }}">
@@ -144,6 +145,7 @@
 <h2>Unexplained</h2>
 {% if unknown %}
 <div class="note">Actions where neither an agent's log nor keyboard activity says who did it.</div>
+<div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
 <table>
   <tr><th style="width:84px">Time</th><th>What happened</th><th>Why unexplained</th></tr>
   {% for a in unknown %}

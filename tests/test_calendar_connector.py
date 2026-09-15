@@ -77,13 +77,16 @@ def test_attribution_and_declaration(tmp_path):
 
 
 def test_parse_events_and_script():
-    out = FS.join(["ABC-1", "Dentist, 2pm", "3600", "7200", "false", "Work", "", "-60"]) + RS \
-        + FS.join(["ABC-2", "Trip", "86400", "172800", "true", "Home", "Paris", "-5"]) + RS + "junk" + RS
-    events = parse_events(out, 1000.0)
+    out = FS.join(["ABC-1", "Dentist, 2pm", "1789400000", "1789403600", "false", "Work", "", "1789390000"]) + RS \
+        + FS.join(["ABC-2", "Trip", "1.7894864E+9", "1789572800", "true", "Home", "Paris", "1789390005"]) + RS + "junk" + RS
+    events = parse_events(out)
     assert [e["id"] for e in events] == ["ABC-1", "ABC-2"]
-    assert events[0]["title"] == "Dentist, 2pm" and events[0]["start"] == 4600.0 and events[0]["modified"] == 940.0
+    assert events[0]["title"] == "Dentist, 2pm" and events[0]["start"] == 1789400000.0 and events[0]["modified"] == 1789390000.0
     assert events[1]["all_day"] is True and events[1]["location"] == "Paris" and events[1]["created"] is None
-    assert 'if cname is not in {"Birthdays"' in _script(None)
+    assert events[1]["start"] == 1789486400.0                                    # AppleScript's E-notation is fine
+    script = _script(None)
+    assert 'do shell script "date +%s"' in script and "epoch + ((stamp date of e) - now)" in script
+    assert 'if cname is not in {"Birthdays"' in script
     assert 'if cname is in {"Work", "Agent Receipt Test"}' in _script(["Work", "Agent Receipt Test"])
 
 

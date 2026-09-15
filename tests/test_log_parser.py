@@ -327,6 +327,20 @@ def test_prefilter_skips_lines_without_tool_use(tmp_path):
     assert list(parse_file(path)) == []
 
 
+def test_reconcile_leaves_credential_attributed_rows_alone(tmp_path):
+    conn = connect(tmp_path / "t.db")
+    conn.execute(
+        "INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json, source_ref) "
+        "VALUES (1, 'google calendar (bot@x.c)', 'marc', 'log', 'create_event', 'Standup', 'agent', "
+        "'created by the agent''s own Google account', ?, 'gcal:primary:e1')",
+        (json.dumps({"source": "google_calendar", "tool": "gcal:event", "event": {"id": "e1"}}),),
+    )
+    conn.commit()
+    assert reconcile(conn) == (0, 0)
+    assert conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0] == 1
+    conn.close()
+
+
 def test_reconcile_fills_missing_user(tmp_path):
     conn = connect(tmp_path / "t.db")
     _insert_raw(conn, "r2", "rm x")

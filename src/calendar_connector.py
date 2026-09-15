@@ -50,11 +50,15 @@ def _script(calendar_names) -> str:
     else:
         skip = ", ".join('"' + n + '"' for n in sorted(DEFAULT_SKIP))
         guard = f"if cname is not in {{{skip}}} then"
+    # Times are absolute Unix seconds: the script reads the Unix clock and the
+    # Calendar clock at the same instant, so every poll agrees to the second
+    # (a relative "seconds from now" drifted between polls and looked like edits).
     return f"""
     set RS to character id 30
     set FS to character id 31
+    set epoch to (do shell script "date +%s") as integer
+    set now to current date
     tell application "Calendar"
-      set now to current date
       set lo to now - {PAST_DAYS} * days
       set hi to now + {FUTURE_DAYS} * days
       set out to ""
@@ -68,7 +72,7 @@ def _script(calendar_names) -> str:
               set loc to location of e
               if loc is missing value then set loc to ""
             end try
-            set out to out & (uid of e) & FS & (summary of e) & FS & (((start date of e) - now) as string) & FS & (((end date of e) - now) as string) & FS & (allday event of e) & FS & cname & FS & loc & FS & (((stamp date of e) - now) as string) & RS
+            set out to out & (uid of e) & FS & (summary of e) & FS & ((epoch + ((start date of e) - now)) as string) & FS & ((epoch + ((end date of e) - now)) as string) & FS & (allday event of e) & FS & cname & FS & loc & FS & ((epoch + ((stamp date of e) - now)) as string) & RS
           end repeat
         end if
       end repeat
@@ -77,8 +81,8 @@ def _script(calendar_names) -> str:
     """
 
 
-def parse_events(output: str, now: float) -> list[dict]:
-    """Turn the script's delimited output into event dicts (offsets are relative to `now`)."""
+def parse_events(output: str) -> list[dict]:
+    """Turn the script's delimited output into event dicts (times are absolute Unix seconds)."""
     events = []
     for rec in output.split(RS):
         parts = rec.split(FS)
@@ -86,23 +90,22 @@ def parse_events(output: str, now: float) -> list[dict]:
             continue
         uid, title, start, end, all_day, calendar, location, modified = parts[:8]
 
-        def rel(v):
+        def stamp(v):
             try:
-                return now + float(v)
+                return float(v.replace(",", ""))
             except ValueError:
                 return None
 
         events.append({
-            "id": uid.strip(), "title": title or "(no title)", "start": rel(start), "end": rel(end),
+            "id": uid.strip(), "title": title or "(no title)", "start": stamp(start), "end": stamp(end),
             "all_day": all_day.strip().lower() == "true", "calendar": calendar, "location": location or None,
-            "attendees": [], "created": None, "modified": rel(modified),
+            "attendees": [], "created": None, "modified": stamp(modified),
         })
     return events
 
 
 def read_events(calendar_names=None) -> list[dict]:
     """Every event in the watched window, as plain dicts, via the Calendar app."""
-    now = time.time()
     proc = subprocess.run(["osascript", "-"], input=_script(calendar_names), capture_output=True,
                           text=True, timeout=OSASCRIPT_TIMEOUT)
     if proc.returncode != 0:
@@ -111,7 +114,7 @@ def read_events(calendar_names=None) -> list[dict]:
             raise CalendarAccessError("Agent Receipt is not allowed to control Calendar "
                                       "(System Settings → Privacy & Security → Automation)")
         raise RuntimeError(err or f"osascript exited {proc.returncode}")
-    return parse_events(proc.stdout, now)
+    return parse_events(proc.stdout)
 
 
 def _when(ev: dict) -> str:
@@ -155,7 +158,7 @@ def sync(conn: sqlite3.Connection, settings: dict, events: list[dict], user: str
                                       f"appeared in calendar '{ev['calendar']}'; reversibility: the event can be deleted",
                                       raw, f"cal:{ev['id']}"))
                 counts["created"] += conn.total_changes - before
-        elif ev.get("modified") and prior[3] and ev["modified"] > prior[3] + 1:
+        elif ev.get("modified") and prior[3] and ev["modified"] > prior[3] + 2:
             stamp = ev["modified"]
             before = conn.total_changes
             conn.execute(INSERT, (stamp, agent, user, "other", f"Changed: {label}", 1,

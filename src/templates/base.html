@@ -215,7 +215,20 @@ This proves the logs were not altered after the receipt read them; it cannot pro
     document.querySelectorAll("[data-toggle-type]").forEach(function (chip) {
       chip.classList.toggle("off", hiddenTypes.indexOf(chip.getAttribute("data-toggle-type")) >= 0);
     });
+    // Say so when the Show chips are hiding rows, so a filtered view never looks empty for no reason.
+    document.querySelectorAll("[data-hidden-note]").forEach(function (note) {
+      var section = note.closest("[data-section]");
+      var hidden = section ? section.querySelectorAll("tr[data-type].hidden").length : 0;
+      note.textContent = hidden ? hidden + " row" + (hidden === 1 ? "" : "s") + " hidden by your Show settings — " : "";
+      var link = note.nextElementSibling;
+      if (link) link.classList.toggle("hidden", hidden === 0);
+    });
   }
+  document.querySelectorAll("[data-show-all]").forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      e.preventDefault(); hiddenTypes = []; store.set("ar.hiddenTypes", hiddenTypes); applyTypes();
+    });
+  });
   document.querySelectorAll("[data-toggle-type]").forEach(function (chip) {
     chip.addEventListener("click", function () {
       var t = chip.getAttribute("data-toggle-type"), i = hiddenTypes.indexOf(t);
