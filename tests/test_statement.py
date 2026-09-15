@@ -141,7 +141,8 @@ def test_range_week_month_all_pages(tmp_path):
     assert "2026-09-13 to 2026-09-14" in html and "2 days" in html
     assert '<b>5</b><span class="label">actions</span>' in html                 # both days counted
     assert "yesterday.html" in html and "git commit -m hi" in html
-    assert 'href="/day/2026-09-13">2026-09-13</a></td><td>1</td>' in html         # by-day table
+    assert 'href="/day/2026-09-13" class="daychip"><span>2026-09-13</span><b>1</b>' in html   # by-day grid
+    assert html.index('data-section="actions"') < html.index('data-section="byday"') < html.index('data-section="keyboard"')
     assert "/export.csv?start=2026-09-13&end=2026-09-14" in html
     html = client.get("/range/2026-09-13/2026-09-14?type=post").get_data(as_text=True)
     assert "yesterday.html" in html and "git commit -m hi" not in html

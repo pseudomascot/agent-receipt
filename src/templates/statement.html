@@ -23,9 +23,9 @@
   <span class="label">View</span>
   <button type="button" class="chip check" data-toggle-section="summary">Summary</button>
   <button type="button" class="chip check" data-toggle-section="totals">Totals</button>
-  <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
-  {% if not single_day %}<button type="button" class="chip check" data-toggle-section="byday">By day</button>{% endif %}
   <button type="button" class="chip check" data-toggle-section="actions">Actions</button>
+  {% if not single_day %}<button type="button" class="chip check" data-toggle-section="byday">By day</button>{% endif %}
+  <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
   <button type="button" class="chip check" data-toggle-section="unknown">Unexplained</button>
   <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
 </div>
@@ -49,29 +49,6 @@
   {% for cur, amt in money.items() %}<div class="tile"><b>{{ '%.2f'|format(amt) }}</b><span class="label">{{ cur }} moved</span></div>{% endfor %}
 </div>
 <div class="note" style="margin-top:10px"><b>By an agent</b> = the agent's own log says it did it. <b>By a person</b> = someone was typing or clicking just before it and no agent claims it (only possible for things seen through a mailbox or card). <b>Unexplained</b> = neither.</div>
-</section>
-
-{% if not single_day and by_day %}
-<section class="card" data-section="byday">
-<h2>By day</h2>
-<table class="compact">
-  <tr><th>Day</th><th>Actions</th></tr>
-  {% for d, n in by_day %}<tr><td><a href="/day/{{ d }}">{{ d }}</a></td><td>{{ n }}</td></tr>{% endfor %}
-</table>
-</section>
-{% endif %}
-
-<section class="card" data-section="keyboard">
-<h2>Was anyone at the keyboard?</h2>
-{% if monitor_intervals %}
-<div>Agent Receipt was watching the keyboard and mouse for about <b>{{ monitor_text }}</b>
-  {% if single_day %}({% if monitor_intervals|length == 1 %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[0][1] }}{% else %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[-1][1] }}, with {{ monitor_intervals|length - 1 }} break{{ '' if monitor_intervals|length == 2 else 's' }}{% endif %}){% else %}across {{ monitor_intervals|length }} stretch{{ '' if monitor_intervals|length == 1 else 'es' }}{% endif %}.
-  {% if uncovered %}<b>{{ uncovered }} of {{ total }}</b> actions happened while it wasn't watching — for those, it can't say whether a person was present.{% else %}It was watching for every action listed.{% endif %}
-  {% if single_day and monitor_intervals|length > 1 %}<details class="screen-only" style="display:inline"><summary style="display:inline;cursor:pointer;color:var(--accent)">show times</summary>
-  <span class="note">{% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}</span></details>{% endif %}</div>
-{% else %}
-<div class="note">Agent Receipt wasn't watching the keyboard and mouse {% if single_day %}on this day{% else %}in this range{% endif %}, so it can't say whether a person was present for any action. What the agents did is still certain — that comes from their own logs.</div>
-{% endif %}
 </section>
 
 <section class="card" data-section="actions">
@@ -137,6 +114,28 @@
 {% endfor %}
 {% else %}
 <div class="empty">No actions{% if type_filter %} in {{ type_label(type_filter) }}{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
+{% endif %}
+</section>
+
+{% if not single_day and by_day %}
+<section class="card" data-section="byday">
+<h2>By day</h2>
+<div class="days">
+  {% for d, n in by_day %}<a href="/day/{{ d }}" class="daychip"><span>{{ d }}</span><b>{{ n }}</b></a>{% endfor %}
+</div>
+</section>
+{% endif %}
+
+<section class="card" data-section="keyboard">
+<h2>Was anyone at the keyboard?</h2>
+{% if monitor_intervals %}
+<div>Agent Receipt was watching the keyboard and mouse for about <b>{{ monitor_text }}</b>
+  {% if single_day %}({% if monitor_intervals|length == 1 %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[0][1] }}{% else %}{{ monitor_intervals[0][0] }}&ndash;{{ monitor_intervals[-1][1] }}, with {{ monitor_intervals|length - 1 }} break{{ '' if monitor_intervals|length == 2 else 's' }}{% endif %}){% else %}across {{ monitor_intervals|length }} stretch{{ '' if monitor_intervals|length == 1 else 'es' }}{% endif %}.
+  {% if uncovered %}<b>{{ uncovered }} of {{ total }}</b> actions happened while it wasn't watching — for those, it can't say whether a person was present.{% else %}It was watching for every action listed.{% endif %}
+  {% if single_day and monitor_intervals|length > 1 %}<details class="screen-only" style="display:inline"><summary style="display:inline;cursor:pointer;color:var(--accent)">show times</summary>
+  <span class="note">{% for s, e in monitor_intervals %}{{ s }}&ndash;{{ e }}{% if not loop.last %}, {% endif %}{% endfor %}</span></details>{% endif %}</div>
+{% else %}
+<div class="note">Agent Receipt wasn't watching the keyboard and mouse {% if single_day %}on this day{% else %}in this range{% endif %}, so it can't say whether a person was present for any action. What the agents did is still certain — that comes from their own logs.</div>
 {% endif %}
 </section>
 
