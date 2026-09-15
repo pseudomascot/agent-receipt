@@ -109,18 +109,28 @@ def api_get(bearer: str, path: str, params: dict | None = None) -> dict:
         raise GoogleError(exc.code, payload) from None
 
 
-def list_changes(bearer: str, calendar_id: str, sync_token: str | None, api=api_get):
-    """All events (paged) since sync_token, or a 30-day-back full listing. Returns (events, next_sync_token)."""
+def list_changes(bearer: str, calendar_id: str, sync_token: str | None, api=api_get, since_days=PAST_DAYS):
+    """All events (paged) since sync_token, or a full listing. Returns (events, next_sync_token).
+
+    The full listing asks for the last `since_days` of changes; Google answers
+    410 when a calendar's history is shorter than that (new accounts), in which
+    case it is fetched without a time bound."""
     events, page = [], None
+    path = f"/calendars/{urllib.parse.quote(calendar_id, safe='')}/events"
     while True:
         params = {"maxResults": 2500, "showDeleted": "true", "singleEvents": "true"}
         if sync_token:
             params["syncToken"] = sync_token
-        else:
-            params["updatedMin"] = (datetime.now(timezone.utc) - timedelta(days=PAST_DAYS)).isoformat()
+        elif since_days:
+            params["updatedMin"] = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
         if page:
             params["pageToken"] = page
-        data = api(bearer, f"/calendars/{urllib.parse.quote(calendar_id, safe='')}/events", params)
+        try:
+            data = api(bearer, path, params)
+        except GoogleError as exc:
+            if exc.status == 410 and not sync_token and since_days and not page:
+                return list_changes(bearer, calendar_id, None, api, since_days=None)
+            raise
         events.extend(data.get("items", []))
         page = data.get("nextPageToken")
         if not page:

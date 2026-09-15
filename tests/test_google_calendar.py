@@ -29,16 +29,19 @@ def _ev(i, title, created, updated=None, creator="marc@example.com", status="con
 class FakeAPI:
     """Pages of results keyed by syncToken; records calls."""
 
-    def __init__(self):
+    def __init__(self, reject_updated_min=False):
         self.pages = {}       # sync_token (or None) -> list of pages (dicts)
         self.calls = []
         self.gone = set()
+        self.reject_updated_min = reject_updated_min
 
     def __call__(self, bearer, path, params):
         self.calls.append(params)
         token = params.get("syncToken")
         if token in self.gone:
             raise GoogleError(410, {"error": {"message": "Sync token is no longer valid"}})
+        if self.reject_updated_min and "updatedMin" in params:
+            raise GoogleError(410, {"error": {"message": "The requested minimum modification time lies too far in the past."}})
         pages = self.pages[token]
         idx = int(params.get("pageToken", 0))
         page = dict(pages[idx])
@@ -119,6 +122,14 @@ def test_tokens_and_settings(tmp_path):
     s = google_calendar_settings({"RECEIPT_GOOGLE_CLIENT_ID": "a.apps", "RECEIPT_GOOGLE_CLIENT_SECRET": "b",
                                   "RECEIPT_GOOGLE_AGENT_EMAILS": "Bot@Example.com, x@y.z", "RECEIPT_GOOGLE_CALENDARS": ""})
     assert s["calendars"] == ["primary"] and s["agent_emails"] == ["Bot@Example.com", "x@y.z"]
+
+
+def test_short_history_calendar_falls_back_to_unbounded_listing():
+    api = FakeAPI(reject_updated_min=True)
+    api.pages[None] = [{"items": [{"id": "only"}], "nextSyncToken": "S0"}]
+    events, token = list_changes("bearer", "primary", None, api)
+    assert [e["id"] for e in events] == ["only"] and token == "S0"
+    assert "updatedMin" in api.calls[0] and "updatedMin" not in api.calls[1]
 
 
 def test_list_changes_pages_and_params():
