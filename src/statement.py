@@ -8,9 +8,12 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, redirect, render_template, request
 
+from agents import history as agent_history, list_agents, restore, retire
+from agents import retired as retired_agents
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from doctor import status as machine_status
 from export import export_csv, money_csv
+from log_parser import current_user
 from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
                      statement, type_label)
 from store import DB_PATH, connect
@@ -60,6 +63,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             integrity = status_line(conn)
             alerted = unseen_action_ids(conn, day_bounds(start)[0], day_bounds(end)[1])
             open_alerts = unseen_count(conn)
+            retired = retired_agents(conn)
         finally:
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
@@ -67,7 +71,8 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             "statement.html", coverage_notes=coverage_notes(),
             summary=summary_text(data, integrity, open_alerts),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
-            integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(), **data)
+            integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(),
+            retired=retired, **data)
 
     @app.route("/")
     def index():
@@ -154,6 +159,31 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         name = f"agent-receipt_money_{currency}_{data['start']}_to_{data['end']}.csv"
         return Response(text, mimetype="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    @app.route("/agents")
+    def agents_page():
+        conn = db()
+        try:
+            items = list_agents(conn)
+            changes = agent_history(conn)
+            integrity = status_line(conn)
+        finally:
+            conn.close()
+        return render_template("agents.html", agents=items, changes=changes, coverage_notes=coverage_notes(),
+                               integrity=integrity, nav="agents")
+
+    @app.route("/agents/status", methods=["POST"])
+    def agents_status():
+        agent = (request.form.get("agent") or "").strip()
+        action = request.form.get("action")
+        note = (request.form.get("note") or "").strip()[:200]
+        if agent and action in ("retire", "restore"):
+            conn = db()
+            try:
+                (retire if action == "retire" else restore)(conn, agent, current_user(), note)
+            finally:
+                conn.close()
+        return redirect("/agents")
 
     @app.route("/alerts")
     def alerts_page():

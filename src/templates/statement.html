@@ -66,7 +66,7 @@
   <span class="label">Agent</span>
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}">{{ agent }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}

@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS calendar_seen (
     last_seen REAL NOT NULL
 );
 
+-- Agents that have been retired from the Agents page. History is never touched;
+-- an action by a retired agent after retired_at raises an alert.
+CREATE TABLE IF NOT EXISTS agent_status (
+    agent TEXT PRIMARY KEY,
+    retired_at REAL NOT NULL,
+    note TEXT,
+    by_user TEXT
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

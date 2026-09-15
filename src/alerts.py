@@ -24,6 +24,7 @@ RULES = {
     "irreversible_burst": f"{BURST_THRESHOLD}+ irreversible actions by one agent within an hour",
     "money_over_threshold": f"a payment over {MONEY_THRESHOLD:.0f}",
     "unknown_attribution": "an action nobody can be confirmed for",
+    "retired_agent_acted": "an action by an agent after it was retired on the Agents page",
 }
 
 
@@ -86,6 +87,9 @@ def _matches(conn: sqlite3.Connection, a: dict):
         yield "money_over_threshold", f"{a['agent']}: {_short(_what(a))}"
     if a["attribution"] == "unknown":
         yield "unknown_attribution", f"nobody can be confirmed for: {_short(_what(a))}"
+    status = conn.execute("SELECT retired_at FROM agent_status WHERE agent = ?", (a["agent"],)).fetchone()
+    if status and a["timestamp"] > status[0]:
+        yield "retired_agent_acted", f"{a['agent']} acted after being retired: {_short(_what(a))}"
 
 
 def _short(text, n=80) -> str:

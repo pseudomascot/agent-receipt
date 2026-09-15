@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — Agents{% endblock %}
+{% block body %}
+{% set active = agents|rejectattr('retired')|list %}
+{% set gone = agents|selectattr('retired')|list %}
+<div class="page-title"><h1>Agents</h1><span class="sub">{{ active|length }} active · {{ gone|length }} retired</span></div>
+
+<section class="card" data-section="agents">
+<h2>Who has acted on this Mac</h2>
+<div class="note" style="margin-bottom:12px">
+  Identities come from the agents' own logs, from credentials the receipt reads (a mailbox, a card, a Google account),
+  or from what an agent declares through the inbox — they are observed, not issued.
+  <b>Retire</b> says "from now on this agent is not supposed to act": nothing it did is removed or hidden,
+  its rows stay on every statement, and anything it does afterwards is flagged for review.
+  Retiring does not stop the agent — that takes revoking its mailbox, card or account at the issuer.
+</div>
+{% if agents %}
+<table>
+  <tr><th>Agent</th><th>What it is</th><th style="width:110px">First seen</th><th style="width:110px">Last seen</th><th style="width:210px">Actions</th><th style="width:100px">Needs review</th><th style="width:250px">Status</th></tr>
+  {% for a in agents %}
+  <tr{% if a.retired %} class="retired"{% endif %}>
+    <td><b>{{ a.name }}</b>{% if a.users %}<div class="note">{{ a.users|join(', ') }}</div>{% endif %}</td>
+    <td><span class="pill type">{{ a.kind }}</span><div class="note">{{ a.what }}</div></td>
+    <td class="time">{{ a.first_seen or '—' }}</td>
+    <td class="time">{{ a.last_seen or '—' }}</td>
+    <td>{% if a.total %}<a href="/all?agent={{ a.name|urlencode }}#actions">{{ a.total }}</a>
+      <div class="note">{% for t, n in a.by_type|dictsort(by='value', reverse=true) %}{{ type_label(t)|lower }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+      {% if a.irreversible or a.money %}<div class="note">{% if a.irreversible %}{{ a.irreversible }} can't be undone{% endif %}{% if a.irreversible and a.money %} · {% endif %}{% if a.money %}{{ a.money }} with money{% endif %}</div>{% endif %}
+      {% else %}<span class="note">nothing yet</span>{% endif %}</td>
+    <td>{% if a.open_alerts %}<a href="/alerts" class="pill unknown">{{ a.open_alerts }}</a>{% else %}<span class="note">0</span>{% endif %}</td>
+    <td>
+      {% if a.retired %}
+      <span class="pill not">retired</span> <span class="note">{{ a.retired.when }}{% if a.retired.by_user %} by {{ a.retired.by_user }}{% endif %}</span>
+      {% if a.retired.note %}<div class="note">{{ a.retired.note }}</div>{% endif %}
+      <form method="post" action="/agents/status" class="screen-only" style="margin-top:6px">
+        <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="restore">
+        <button type="submit" class="btn">Restore</button>
+      </form>
+      {% else %}
+      <span class="pill covered">active</span>
+      <form method="post" action="/agents/status" class="screen-only" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">
+        <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="retire">
+        <input type="text" name="note" placeholder="why (optional)" maxlength="200" style="flex:1; min-width:110px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
+        <button type="submit" class="btn" onclick="return confirm('Retire {{ a.name|e }}? Its history stays; anything it does from now on is flagged.')">Retire</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No agents seen yet. They appear here as soon as one acts, or as soon as a connector is configured.</div>
+{% endif %}
+</section>
+
+<section class="card" data-section="changes">
+<h2>Retire / restore history</h2>
+{% if changes %}
+<div class="note">Each press is itself a line on the receipt, attributed to the person who pressed it.</div>
+<table class="compact" style="min-width:520px; margin-top:8px">
+  {% for c in changes %}
+  <tr><td class="time"><a href="/day/{{ c.day }}">{{ c.when }}</a></td><td>{{ c.what }}</td><td class="note">{{ c.user }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">Nothing retired or restored so far.</div>
+{% endif %}
+</section>
+{% endblock %}

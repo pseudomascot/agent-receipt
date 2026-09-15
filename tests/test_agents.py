@@ -1,0 +1,113 @@
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from agents import RECEIPT_AGENT, history, kind_of, known_identities, list_agents, retire, restore, retired  # noqa: E402
+from alerts import evaluate, unseen  # noqa: E402
+from correlator import correlate  # noqa: E402
+from statement import create_app  # noqa: E402
+from store import connect  # noqa: E402
+
+T = datetime(2026, 9, 14, 10, 30).timestamp()
+ENV = {"RECEIPT_IMAP_USER": "bot@example.com", "RECEIPT_IMAP_PASSWORD": "hunter2secret",
+       "RECEIPT_STRIPE_TEST_KEY": "sk_test_zzsecret", "RECEIPT_GOOGLE_CLIENT_ID": "id", "RECEIPT_GOOGLE_CLIENT_SECRET": "gsecretzz",
+       "RECEIPT_GOOGLE_AGENT_EMAILS": "bot@example.com"}
+
+
+def _seed(db_path):
+    conn = connect(db_path)
+    conn.executemany(
+        "INSERT INTO actions (timestamp, agent, user, source, action_type, target, reversible, amount, attribution, confidence_note, raw_json) "
+        "VALUES (?, ?, ?, 'log', ?, ?, ?, ?, 'agent', 'agent log', '{}')",
+        [
+            (T, "claude-code", "marc", "file_write", "a.py", 1, None),
+            (T + 60, "claude-code", "marc", "execute", "rm x", 0, None),
+            (T + 120, "cowork (scheduled task)", "marc", "execute", "deploy", 0, None),
+            (T + 180, "mailbox bot@example.com", "sam", "purchase", "ACME", 0, 12.0),
+        ],
+    )
+    conn.commit()
+    return conn
+
+
+def test_known_identities_and_kinds():
+    known = known_identities(ENV)
+    assert known["mailbox bot@example.com"][0] == "mailbox"
+    assert known["stripe card (test mode)"] == ("card", "a Stripe account (test mode)")
+    assert known["google calendar (bot@example.com)"][0] == "google account"
+    assert "secret" not in str(known)                                              # no secrets in labels
+    assert kind_of("claude-code", known)[0] == "local agent"
+    assert "schedule" in kind_of("cowork (scheduled task)", known)[1]
+    assert kind_of("claude-code / worker-3", known)[0] == "local agent"
+    assert kind_of("my-bot", known)[0] == "declared"
+
+
+def test_list_retire_restore_and_alert(tmp_path):
+    conn = _seed(tmp_path / "t.db")
+    agents = list_agents(conn, ENV)
+    names = [a["name"] for a in agents]
+    assert names[:3] == ["mailbox bot@example.com", "cowork (scheduled task)", "claude-code"]   # newest first
+    assert "stripe card (test mode)" in names and "google calendar (bot@example.com)" in names  # configured, quiet
+    cc = next(a for a in agents if a["name"] == "claude-code")
+    assert cc["total"] == 2 and cc["irreversible"] == 1 and cc["users"] == ["marc"]
+    assert cc["by_type"] == {"file_write": 1, "execute": 1} and cc["retired"] is None
+    mail = next(a for a in agents if a["name"] == "mailbox bot@example.com")
+    assert mail["money"] == 1 and mail["kind"] == "mailbox"
+
+    row_id = retire(conn, "claude-code", "marc", "kept deleting things")
+    assert row_id and retire(conn, "claude-code", "marc") is None                # second press is a no-op
+    assert "claude-code" in retired(conn) and retired(conn)["claude-code"]["note"] == "kept deleting things"
+    assert conn.execute("SELECT COUNT(*) FROM actions WHERE agent = 'claude-code'").fetchone()[0] == 2   # history untouched
+
+    correlate(conn)                                                              # the button press stays a person's
+    rec = conn.execute("SELECT agent, source, attribution, target FROM actions WHERE id = ?", (row_id,)).fetchone()
+    assert rec == (RECEIPT_AGENT, "input", "human", "Retired agent: claude-code — kept deleting things")
+    assert history(conn)[0]["event"] == "retire" and history(conn)[0]["agent"] == "claude-code"
+
+    agents = list_agents(conn, ENV)
+    assert agents[-1]["name"] == "claude-code" and agents[-1]["retired"]["by_user"] == "marc"   # retired sort last
+    assert RECEIPT_AGENT not in [a["name"] for a in agents]
+
+    # An old action (before retirement) does not alert; a new one does.
+    evaluate(conn)
+    conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, reversible, attribution, confidence_note, raw_json) "
+                 "VALUES (?, 'claude-code', 'marc', 'log', 'file_write', 'b.py', 1, 'agent', 'agent log', '{}')", (time.time() + 1,))
+    conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, reversible, attribution, confidence_note, raw_json) "
+                 "VALUES (?, 'claude-code', 'marc', 'log', 'file_write', 'old.py', 1, 'agent', 'agent log', '{}')", (T - 5,))
+    conn.commit()
+    new = evaluate(conn)
+    rules = [(n["rule"], n["target"]) for n in new]
+    assert ("retired_agent_acted", "b.py") in rules and ("retired_agent_acted", "old.py") not in rules
+    assert any(i["rule"] == "retired_agent_acted" for i in unseen(conn))
+
+    assert restore(conn, "claude-code", "marc") and restore(conn, "claude-code", "marc") is None
+    assert "claude-code" not in retired(conn)
+    assert [h["event"] for h in history(conn)] == ["restore", "retire"]
+    conn.close()
+
+
+def test_agents_page_and_form(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db).close()
+    client = create_app(db).test_client()
+    html = client.get("/agents").get_data(as_text=True)
+    assert "claude-code" in html and "cowork (scheduled task)" in html and 'href="/agents" class="on"' in html
+    assert "Nothing retired or restored" in html and 'name="action" value="retire"' in html
+
+    resp = client.post("/agents/status", data={"agent": "claude-code", "action": "retire", "note": "noisy"})
+    assert resp.status_code == 302 and resp.headers["Location"].endswith("/agents")
+    html = client.get("/agents").get_data(as_text=True)
+    assert 'class="retired"' in html and "Retired agent: claude-code — noisy" in html and "Restore" in html
+    assert "claude-code · retired" in client.get("/day/2026-09-14").get_data(as_text=True)   # chip label
+    day = client.get(f"/day/{datetime.now().date().isoformat()}").get_data(as_text=True)
+    assert "Retired agent: claude-code" in day                                   # the press is on the statement
+
+    client.post("/agents/status", data={"agent": "claude-code", "action": "restore"})
+    html = client.get("/agents").get_data(as_text=True)
+    assert 'class="retired"' not in html and "Restored agent: claude-code" in html
+    client.post("/agents/status", data={"agent": "", "action": "retire"})      # ignored
+    client.post("/agents/status", data={"agent": "claude-code", "action": "bogus"})
+    assert not retired(connect(db))

@@ -52,6 +52,8 @@ def _describe_file(tool, path, cwd, extra):
 
 def _describe_other(tool, target, extra):
     short = tool.split("__", 2)[-1] if tool.startswith("mcp__") else tool
+    if tool.startswith("agent-receipt:"):                                  # the app's own buttons
+        return _short(target)
     if tool == "calendar:changed":
         return f"Changed a calendar event: {_short(target.replace('Changed: ', '', 1))}"
     if tool == "calendar:deleted":

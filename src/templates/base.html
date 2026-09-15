@@ -75,6 +75,8 @@
   tr:last-child td { border-bottom: 0; }
   tbody tr:hover td { background: #fbfaf8; }
   td.time { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  tr.retired td { opacity: .62; }
+  tr.retired td:last-child { opacity: 1; }
   .raw { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; color: var(--faint); word-break: break-all; max-width: 560px; margin-top: 3px; }
   td.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; word-break: break-all; }
   table.compact { width: auto; min-width: 280px; }
@@ -160,6 +162,7 @@
     <a href="/all"{% if nav == 'all' %} class="on"{% endif %}>All time</a>
     <a href="/"{% if nav == 'index' %} class="on"{% endif %}>All days</a>
     <a href="/money"{% if nav == 'money' %} class="on"{% endif %}>Money</a>
+    <a href="/agents"{% if nav == 'agents' %} class="on"{% endif %}>Agents</a>
   </nav>
   <a href="/alerts" class="badge {{ 'alert' if needs_review else 'clear' }}">{% if needs_review %}{{ needs_review }} need{{ 's' if needs_review == 1 else '' }} review{% else %}Nothing needs review{% endif %}</a>
 </div>{% block toolbar %}{% endblock %}</header>

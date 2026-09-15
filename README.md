@@ -56,6 +56,10 @@ stay inside this folder; `make_app.command` rebuilds it.
   net — and a three-column **QuickBooks / Xero** file your bookkeeper matches
   against the bank feed (`docs/BOOKKEEPING.md`). The receipt does not file
   taxes; it tells the bookkeeper who spent the money and why.
+- **Agents:** every identity that has acted — what it is, first/last seen,
+  counts, open alerts — with a **Retire** switch. Retiring never removes
+  history; it records the decision on the receipt and flags anything the
+  agent does afterwards (`docs/AGENTS.md`).
 - **Coverage**, on every page: what is and isn't being watched. A receipt with
   silent gaps is worse than none.
 

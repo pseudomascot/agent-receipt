@@ -66,10 +66,14 @@ def correlate(conn: sqlite3.Connection, window: float = WINDOW_SECONDS) -> dict:
     rows = conn.execute("SELECT id, timestamp, source, confidence_note FROM actions").fetchall()
     counts = {"agent": 0, "human": 0, "unknown": 0}
     for action_id, ts, source, note in rows:
-        covered = is_input_covered(conn, ts)
-        input_count = count_input_before(conn, ts, window)
-        log_match = source != "log" and has_log_action_before(conn, ts, window, action_id)
-        attribution, reason = attribute(source, covered, input_count, log_match, window)
+        if source == "input":
+            # The app's own buttons (retire / restore an agent): a person pressed them.
+            attribution, reason = "human", "a button in Agent Receipt was pressed"
+        else:
+            covered = is_input_covered(conn, ts)
+            input_count = count_input_before(conn, ts, window)
+            log_match = source != "log" and has_log_action_before(conn, ts, window, action_id)
+            attribution, reason = attribute(source, covered, input_count, log_match, window)
         base = (note or "").split(NOTE_SEPARATOR)[0]
         new_note = f"{base}{NOTE_SEPARATOR}{reason}" if base else reason
         conn.execute(
