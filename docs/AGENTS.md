@@ -76,5 +76,5 @@ actually stop an agent you revoke what it acts with — its mailbox password,
 its card, its Google login, its API key — at the issuer. Where the issuer has
 an API (a Stripe Issuing card, a Google Workspace user) that can be a button
 in this app; where it does not (a consumer Gmail account, a pasted Stripe
-key) it is a link and a set of steps. That kill-switch panel is the next
-piece of work; see PROGRESS.md.
+key) it is a link and a set of steps. That is the **Stop** page —
+`docs/STOP.md`.

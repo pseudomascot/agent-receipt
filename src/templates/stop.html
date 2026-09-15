@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — Stop{% endblock %}
+{% block body %}
+<div class="page-title"><h1>Stop an agent</h1><span class="sub">take away what it acts with</span></div>
+
+{% if message %}
+<div class="card" style="padding:12px 16px; margin-bottom:16px; border-left:4px solid {{ 'var(--human-fg)' if ok else 'var(--bad-fg)' }}">
+  <b>{{ 'Done' if ok else 'Not done' }}.</b> {{ message }} <span class="note">— recorded on today's receipt.</span>
+</div>
+{% endif %}
+
+<section class="card" data-section="stop-all">
+<h2>Everything at once</h2>
+<div class="note" style="margin-bottom:10px">
+  <b>Freeze all</b> presses every button the app can press itself — freezes Issuing cards, revokes the receipt's Google token, ends Codex and Claude Code processes —
+  and skips anything permanent. The links below still have to be done by hand; they are listed so nothing is forgotten.
+  <b>Retiring</b> an agent (Agents page) records the decision; this page is how you actually cut it off. Neither touches history.
+</div>
+<form method="post" action="/stop/run" class="screen-only" onsubmit="return confirm('Freeze all: freeze Issuing cards, revoke the receipt\'s Google token, and end every Codex and Claude Code process on this Mac — including any session you are talking to right now. Continue?')">
+  <input type="hidden" name="id" value="all">
+  <button type="submit" class="btn primary">Freeze all</button>
+</form>
+</section>
+
+{% for agent, items in groups %}
+{% set d = agent_display(agent) if agent else None %}
+<section class="card" data-section="stop-{{ loop.index }}">
+<h2>{% if d %}{{ d.name }} <span class="muted" style="text-transform:none; letter-spacing:0">· {{ d.sub }}</span>{% else %}Other{% endif %}</h2>
+<table>
+  <tr><th style="width:34%">Control</th><th style="width:130px">What it achieves</th><th>How</th><th style="width:170px"></th></tr>
+  {% for c in items %}
+  <tr>
+    <td><b>{{ c.title }}</b><div class="note">{{ c.detail }}</div></td>
+    <td><span class="pill {{ 'human' if c.effect == 'stops the agent' else 'unknown' if c.effect == 'blinds the receipt' else 'type' }}">{{ c.effect }}</span>
+      {% if c.danger %}<div class="note" style="color:var(--bad-fg)">permanent</div>{% endif %}</td>
+    <td>
+      {% if c.mode == 'link' %}
+      <ol class="note" style="margin:0; padding-left:18px">{% for s in c.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+      {% elif c.mode == 'process' %}<span class="note">the app ends the processes itself</span>
+      {% else %}<span class="note">the app makes the call itself</span>{% endif %}
+    </td>
+    <td class="screen-only">
+      {% if c.mode == 'link' %}
+      <form method="post" action="/stop/run" target="_self" style="display:flex; gap:6px; flex-wrap:wrap">
+        <input type="hidden" name="id" value="{{ c.id }}">
+        {% if c.url %}<a class="btn" href="{{ c.url }}" target="_blank" rel="noopener">Open ↗</a>{% endif %}
+        <button type="submit" class="btn" title="Records that you went to do this">Mark as done</button>
+      </form>
+      {% else %}
+      <form method="post" action="/stop/run" onsubmit="return confirm({{ (c.title ~ ' — ' ~ ('this cannot be undone. ' if c.danger else '') ~ 'Continue?')|tojson }})">
+        <input type="hidden" name="id" value="{{ c.id }}">
+        <button type="submit" class="btn{% if c.danger %}" style="border-color:var(--bad-fg); color:var(--bad-fg){% endif %}">{{ 'Cancel cards' if c.danger else 'Do it now' }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</section>
+{% endfor %}
+
+<section class="card" data-section="stop-history">
+<h2>Presses</h2>
+{% if history %}
+<div class="note">Every press is a line on the receipt, attributed to the person who pressed it, whether or not it worked.</div>
+<table class="compact" style="min-width:560px; margin-top:8px">
+  {% for h in history %}
+  <tr><td class="time"><a href="/day/{{ h.day }}">{{ h.when }}</a></td><td>{{ h.what }}</td><td>{% if h.ok %}<span class="pill covered">worked</span>{% else %}<span class="pill not">failed</span>{% endif %}</td><td class="note">{{ h.user }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No Stop button has been pressed yet.</div>
+{% endif %}
+</section>
+{% endblock %}

@@ -63,6 +63,12 @@ stay inside this folder; `make_app.command` rebuilds it.
   seen, counts, open alerts, and a **Retire** switch. Retiring never removes
   history; it records the decision on the receipt and flags anything the
   agent does afterwards (`docs/AGENTS.md`).
+- **Stop:** cut an agent off. Real API calls where the issuer has one
+  (freeze/cancel Stripe Issuing cards, revoke the receipt's own Google
+  token), ending running Codex / Claude Code processes, and open-plus-steps
+  where there is no API (Gmail, Stripe keys, Cowork schedules). Each button
+  says whether it *stops the agent* or only *blinds the receipt*; every press
+  is recorded (`docs/STOP.md`).
 - **Coverage**, on every page: what is and isn't being watched. A receipt with
   silent gaps is worse than none.
 

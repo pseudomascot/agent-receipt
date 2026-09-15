@@ -5,6 +5,7 @@ Local only. Binds to 127.0.0.1 and never to a public interface.
 
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 from flask import Flask, Response, abort, redirect, render_template, request
 
@@ -17,6 +18,9 @@ from export import export_csv, money_csv
 from log_parser import current_user
 from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
                      statement, type_label)
+from stop import controls as stop_controls
+from stop import presses as stop_presses
+from stop import run as stop_run_control
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, agent_names, summary_text
 from verify import status_line
@@ -198,6 +202,31 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return redirect("/agents")
+
+    @app.route("/stop")
+    def stop_page():
+        conn = db()
+        try:
+            history = stop_presses(conn)
+            integrity = status_line(conn)
+        finally:
+            conn.close()
+        groups = {}
+        for c in stop_controls():
+            groups.setdefault(c["agent"], []).append(c)
+        return render_template("stop.html", groups=list(groups.items()), history=history,
+                               message=request.args.get("msg"), ok=request.args.get("ok") == "1",
+                               coverage_notes=coverage_notes(), integrity=integrity, nav="stop")
+
+    @app.route("/stop/run", methods=["POST"])
+    def stop_run():
+        control_id = (request.form.get("id") or "").strip()
+        conn = db()
+        try:
+            result = stop_run_control(conn, control_id, current_user())
+        finally:
+            conn.close()
+        return redirect("/stop?" + urlencode({"msg": result["message"], "ok": "1" if result["ok"] else "0"}))
 
     @app.route("/alerts")
     def alerts_page():

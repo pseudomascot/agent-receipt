@@ -163,6 +163,7 @@
     <a href="/"{% if nav == 'index' %} class="on"{% endif %}>All days</a>
     <a href="/money"{% if nav == 'money' %} class="on"{% endif %}>Money</a>
     <a href="/agents"{% if nav == 'agents' %} class="on"{% endif %}>Agents</a>
+    <a href="/stop"{% if nav == 'stop' %} class="on"{% endif %}>Stop</a>
   </nav>
   <a href="/alerts" class="badge {{ 'alert' if needs_review else 'clear' }}">{% if needs_review %}{{ needs_review }} need{{ 's' if needs_review == 1 else '' }} review{% else %}Nothing needs review{% endif %}</a>
 </div>{% block toolbar %}{% endblock %}</header>
