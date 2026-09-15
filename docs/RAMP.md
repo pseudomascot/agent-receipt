@@ -81,8 +81,11 @@ minutes it appears on the receipt.
   Stop page, **transaction sync ✓** (91 demo purchases). Purchases on a card we
   did not issue are attributed to the named card holder *by credential*
   (attribution `person`), not left "unexplained" — otherwise every employee
-  coffee would be a Needs-review alert. A purchase on the agent's own fund is
-  the last thing to see live (make one in the sandbox with ⌘J on card 5039).
+  coffee would be a Needs-review alert. **Purchases on the agent's own fund ✓**
+  (two simulated with ⌘J → "add transactions", card 5039, decision mode
+  `stored_controls`): attributed to the sub-agent by credential and flagged
+  "unattended irreversible" — an agent spending with nobody at the keyboard.
+  Every part of the connector is now proven against the sandbox.
 - **Ramp cards belong to a user.** All agent funds hang off the one Ramp user
   in `RECEIPT_RAMP_USER_ID`. Identity lives in the *fund*, which is what
   transactions carry, so this is fine for attribution — but Ramp's own UI will
