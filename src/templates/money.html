@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — Money{% endblock %}
+{% block body %}
+{% set keep = (('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '') ~ (('&user=' ~ (user_filter|urlencode)) if user_filter else '') %}
+<div class="print-only note">Money statement for {{ label }}. Printed from the local Agent Receipt page.</div>
+
+<div class="page-title">
+  <h1>Money</h1>
+  <span class="sub">{{ label }} · {{ money.rows|length }} item{{ '' if money.rows|length == 1 else 's' }} with an amount</span>
+</div>
+<div class="page-actions screen-only">
+  {% for cur in money.currencies %}
+  <a class="btn primary" href="/export-money.csv?start={{ start }}&end={{ end }}&currency={{ cur }}{{ keep }}">Download for QuickBooks / Xero{% if money.currencies|length > 1 %} ({{ cur }}){% endif %}</a>
+  {% endfor %}
+  <a class="btn" href="/export.csv?start={{ start }}&end={{ end }}{{ keep }}">Download full CSV (verifiable)</a>
+  <a class="btn" href="#" onclick="window.print();return false">Print</a>
+</div>
+
+<section class="card" data-section="money-totals">
+<h2>Totals</h2>
+{% if money.currencies %}
+<div class="tiles">
+  {% for cur in money.currencies %}{% set t = money.totals[cur] %}
+  <div class="tile"><b>{{ '%.2f'|format(t.out) }}</b><span class="label">{{ cur }} spent</span></div>
+  <div class="tile"><b>{{ '%.2f'|format(t['in']) }}</b><span class="label">{{ cur }} received</span></div>
+  <div class="tile"><b>{{ '%+.2f'|format(t.net) }}</b><span class="label">{{ cur }} net</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="note" style="margin-top:10px">
+  <b>For your bookkeeper.</b> These amounts are already on your bank, card or Stripe statement — that stays the source of truth.
+  What this page adds is <i>who</i> spent or received the money, for which project, and whether anyone was at the keyboard.
+  The QuickBooks / Xero file is the plain three-column layout (Date, Description, Amount; money out is negative) their bank-import screen accepts;
+  import it and <b>match</b> each line to the bank transaction rather than adding it, so nothing is counted twice.
+  <b>Spent</b> = purchases the receipt saw (card alerts, the agent's own card). <b>Received</b> = payments that came in (Stripe charges).
+</div>
+</section>
+
+<section class="card" data-section="money-rows">
+<h2>By month</h2>
+{% if money.months %}
+{% for month_label, month_key, rows, totals in money.months %}
+<h3>{{ month_label }} <span class="muted">{{ rows|length }} item{{ '' if rows|length == 1 else 's' }} ·
+  {% for cur, t in totals.items() %}{{ cur }} out {{ '%.2f'|format(t.out) }}, in {{ '%.2f'|format(t['in']) }}{% if not loop.last %}; {% endif %}{% endfor %}</span></h3>
+<table>
+  <tr><th style="width:120px">Date</th><th>What happened</th><th style="width:170px">Agent</th><th style="width:100px">Who</th><th style="width:100px; text-align:right">Out</th><th style="width:100px; text-align:right">In</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td class="time"><a href="/day/{{ r.day }}">{{ r.time }}</a></td>
+    <td><div>{{ r.what }}</div>
+      {% if r.artifact_link and r.artifact_link.startswith('http') %}<div class="note"><a href="{{ r.artifact_link }}" target="_blank" rel="noopener">Open ↗</a></div>{% endif %}
+      {% if r.source_ref %}<div class="raw">ref {{ r.source_ref }}</div>{% endif %}</td>
+    <td class="note">{{ r.agent }}{% if r.project and not r.project.startswith('(') %}<br>{{ r.project }}{% endif %}</td>
+    <td><span class="pill {{ r.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[r.attribution] }}</span></td>
+    <td style="text-align:right; font-variant-numeric: tabular-nums; white-space: nowrap">{% if r.direction == 'out' %}{{ '%.2f'|format(r.amount) }} {{ r.currency }}{% endif %}</td>
+    <td style="text-align:right; font-variant-numeric: tabular-nums; white-space: nowrap">{% if r.direction == 'in' %}{{ '%.2f'|format(r.amount) }} {{ r.currency }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% else %}
+<div class="empty">No money movements recorded in this range. Purchases and payments show up here once a mailbox with card alerts, a Stripe account, or an agent's own card is connected — see docs/EMAIL.md and docs/STRIPE.md.</div>
+{% endif %}
+</section>
+{% endblock %}

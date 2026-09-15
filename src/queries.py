@@ -308,3 +308,51 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "prev_day": (start_day - timedelta(days=1)).isoformat(),
         "next_day": (start_day + timedelta(days=1)).isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Money view: only the rows that carry an amount, arranged for a bookkeeper.
+#
+# Direction: a purchase is money going out; anything else with an amount
+# (a Stripe charge received, for example) is money coming in. The bank or
+# card statement stays the source of truth for the numbers — this view adds
+# who spent it, for which project, and whether anyone was at the keyboard.
+# ---------------------------------------------------------------------------
+
+def money_direction(action_type: str) -> str:
+    return "out" if action_type == "purchase" else "in"
+
+
+def money_summary(stats: dict) -> dict:
+    """Group the statement's money rows by month (newest first) with per-currency totals."""
+    rows = []
+    for a in stats["shown"]:
+        if a["amount"] is None:
+            continue
+        cur = (a["currency"] or "?").upper()
+        direction = money_direction(a["action_type"])
+        amount = float(a["amount"])
+        rows.append({**a, "currency": cur, "direction": direction,
+                     "signed": -amount if direction == "out" else amount,
+                     "month": a["day"][:7]})
+    rows.sort(key=lambda r: -r["timestamp"])
+
+    def blank():
+        return {"in": 0.0, "out": 0.0, "net": 0.0, "count": 0}
+
+    def add(bucket, r):
+        b = bucket.setdefault(r["currency"], blank())
+        b[r["direction"]] += abs(r["signed"])
+        b["net"] += r["signed"]
+        b["count"] += 1
+
+    months, totals = {}, {}
+    for r in rows:
+        m = months.setdefault(r["month"], {"rows": [], "totals": {}})
+        m["rows"].append(r)
+        add(m["totals"], r)
+        add(totals, r)
+    month_list = [(datetime.strptime(k, "%Y-%m").strftime("%B %Y"), k, v["rows"], v["totals"])
+                  for k, v in sorted(months.items(), reverse=True)]
+    currencies = sorted(totals, key=lambda c: -totals[c]["count"])
+    return {"rows": rows, "months": month_list, "totals": totals, "currencies": currencies}

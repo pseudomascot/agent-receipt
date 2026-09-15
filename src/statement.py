@@ -10,8 +10,9 @@ from flask import Flask, Response, abort, redirect, render_template, request
 
 from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
 from doctor import status as machine_status
-from export import export_csv
-from queries import ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, statement, type_label
+from export import export_csv, money_csv
+from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
+                     statement, type_label)
 from store import DB_PATH, connect
 from summary import SUMMARIES_DIR, summary_text
 from verify import status_line
@@ -110,6 +111,49 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return render_statement(start, date.today(), "/all", nav="all")
+
+    def render_money(start: date | None, end: date):
+        filters = _filters()
+        conn = db()
+        try:
+            if start is None:
+                start = earliest_day(conn) or end
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            integrity = status_line(conn)
+        finally:
+            conn.close()
+        money = money_summary(data)
+        return render_template("money.html", money=money, coverage_notes=coverage_notes(),
+                               integrity=integrity, nav="money", start=data["start"], end=data["end"],
+                               label=data["label"], agent_filter=filters["agent"], user_filter=filters["user"])
+
+    @app.route("/money")
+    def money_page():
+        return render_money(None, date.today())
+
+    @app.route("/money/<start_str>/<end_str>")
+    def money_range_page(start_str, end_str):
+        start, end = _parse_day(start_str), _parse_day(end_str)
+        if end < start:
+            start, end = end, start
+        return render_money(start, end)
+
+    @app.route("/export-money.csv")
+    def export_money():
+        start = _parse_day(request.args.get("start", ""))
+        end = _parse_day(request.args.get("end", ""))
+        filters = _filters()
+        conn = db()
+        try:
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+        finally:
+            conn.close()
+        money = money_summary(data)
+        currency = (request.args.get("currency") or (money["currencies"][0] if money["currencies"] else "USD")).upper()
+        text = money_csv(money, currency)
+        name = f"agent-receipt_money_{currency}_{data['start']}_to_{data['end']}.csv"
+        return Response(text, mimetype="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.route("/alerts")
     def alerts_page():

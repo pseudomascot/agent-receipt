@@ -52,6 +52,10 @@ stay inside this folder; `make_app.command` rebuilds it.
 - **Download CSV** (opens in Excel or Google Sheets; the footer carries a
   checksum and the command to verify the rows were not altered) and **Print**
   (a paper statement or PDF).
+- **Money:** only the rows with an amount, by month, with spent / received /
+  net — and a three-column **QuickBooks / Xero** file your bookkeeper matches
+  against the bank feed (`docs/BOOKKEEPING.md`). The receipt does not file
+  taxes; it tells the bookkeeper who spent the money and why.
 - **Coverage**, on every page: what is and isn't being watched. A receipt with
   silent gaps is worse than none.
 

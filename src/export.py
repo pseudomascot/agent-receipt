@@ -62,3 +62,42 @@ def _rows(conn, stats: dict):
             a["currency"] or "", a.get("source_ref") or "",
         ])
     return out
+
+
+# ---------------------------------------------------------------------------
+# Bookkeeping export: the three-column layout QuickBooks and Xero accept as a
+# bank-statement import (Date, Description, Amount). Money out is negative.
+# One currency per file. No footer — the importers reject extra rows — so the
+# verifiable copy of the same rows is the full export.csv.
+# ---------------------------------------------------------------------------
+
+MONEY_COLUMNS = ["Date", "Description", "Amount"]
+
+
+def money_description(r: dict) -> str:
+    what = r.get("what") or r.get("target") or ""
+    if what.startswith("Moved money: "):                                  # say which way it moved
+        what = ("Paid: " if r.get("direction") == "out" else "Received: ") + what[len("Moved money: "):]
+    parts = [what, f"agent: {r['agent']}"]
+    project = r.get("project") or ""
+    if project and not project.startswith("("):                            # skip "(unknown project)"
+        parts.append(f"project: {project}")
+    who = {"agent": "done by the agent", "human": "a person was at the keyboard",
+           "unknown": "unexplained"}.get(r.get("attribution"), "")
+    if who:
+        parts.append(who)
+    if r.get("source_ref"):
+        parts.append(f"ref: {r['source_ref']}")
+    return " · ".join(p for p in parts if p)[:250]
+
+
+def money_csv(money: dict, currency: str) -> str:
+    out = io.StringIO(newline="")
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(MONEY_COLUMNS)
+    for r in sorted(money["rows"], key=lambda r: r["timestamp"]):       # chronological
+        if r["currency"] != currency:
+            continue
+        when = datetime.fromtimestamp(r["timestamp"])
+        writer.writerow([when.strftime("%m/%d/%Y"), money_description(r), f"{r['signed']:.2f}"])
+    return out.getvalue()
