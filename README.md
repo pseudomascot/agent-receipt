@@ -49,6 +49,8 @@ stay inside this folder; `make_app.command` rebuilds it.
 - **Needs review:** an irreversible action by a scheduled task or with nobody
   at the keyboard, a burst of irreversible actions, an unexplained action, or
   a payment over a threshold; also a macOS notification within five minutes.
+  The rules are adjustable on that page (threshold, whether people's own
+  purchases count, burst size, each rule on/off); every change is recorded.
 - **Download CSV** (opens in Excel or Google Sheets; the footer carries a
   checksum and the command to verify the rows were not altered) and **Print**
   (a paper statement or PDF).

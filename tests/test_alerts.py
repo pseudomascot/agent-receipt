@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from alerts import evaluate, mark_seen, notify_new, unseen, unseen_action_ids, unseen_count  # noqa: E402
+from alerts import DEFAULTS, evaluate, mark_seen, notify_new, save_settings, settings, unseen, unseen_action_ids, unseen_count  # noqa: E402
 from store import connect  # noqa: E402
 
 NOW = time.time()
@@ -75,3 +75,56 @@ def test_notify_new_only_fresh_and_batched():
     sent.clear()
     assert notify_new(fresh + [{"timestamp": NOW, "message": "m3"}], send) == 1
     assert sent == ["4 new alerts; open the Needs review page"]
+
+
+def test_rules_are_adjustable_and_recorded(tmp_path):
+    from agents import RECEIPT_AGENT
+    conn = connect(tmp_path / "t.db")
+    assert settings(conn) == DEFAULTS and settings(conn)["money_scope"] == "agent"
+
+    person = _add(conn, NOW - 90, "ramp card (sandbox)", amount=800.0, attribution="human", target="Air Canada")
+    agent_small = _add(conn, NOW - 80, "claude-code", amount=150.0, target="shop")
+    unconfirmed0 = _add(conn, NOW - 85, "mailbox bot", amount=600.0, attribution="unknown", target="mystery")
+    got0 = {(n["action_id"], n["rule"]) for n in evaluate(conn)}
+    assert (agent_small, "money_over_threshold") in got0 and (unconfirmed0, "money_over_threshold") in got0   # not a person: flagged
+    assert (person, "money_over_threshold") not in got0                                                        # a person's own purchase: not
+
+    assert save_settings(conn, {"money_threshold": ["250"], "money_scope": ["all"], "burst_threshold": ["3"],
+                                "on.unknown_attribution": ["0", "1"], "on.unattended_irreversible": ["0"]}, "marc")["money_threshold"] == 250.0
+    cfg = settings(conn)
+    assert cfg["money_scope"] == "all" and cfg["burst_threshold"] == 3
+    assert cfg["on.unknown_attribution"] is True and cfg["on.unattended_irreversible"] is False   # last value wins
+    row = conn.execute("SELECT agent, source, attribution, target FROM actions WHERE agent = ?", (RECEIPT_AGENT,)).fetchone()
+    assert row[:3] == (RECEIPT_AGENT, "input", "human")
+    assert row[3] == "Changed alert rules: payment over 250.00 (anyone); 3+ irreversible actions in an hour; off: unattended irreversible; 4 of 5 rules on"
+    assert save_settings(conn, {"money_threshold": ["250"]}, "marc") == cfg                       # no change: no row
+    assert conn.execute("SELECT COUNT(*) FROM actions WHERE agent = ?", (RECEIPT_AGENT,)).fetchone()[0] == 1
+
+    person2 = _add(conn, NOW - 70, "ramp card (sandbox)", amount=300.0, attribution="human", target="Aloft")
+    agent_mid = _add(conn, NOW - 60, "claude-code", amount=200.0, target="shop")                    # under the new threshold
+    sched = _add(conn, NOW - 50, "cowork (scheduled task)", reversible=0)                           # rule is off
+    burst = [_add(conn, NOW - 40 + i, "cowork", reversible=0) for i in range(3)]                    # 3 within the hour (incl. sched? different agent)
+    got = {(n["action_id"], n["rule"]) for n in evaluate(conn)}
+    assert (person2, "money_over_threshold") in got and (agent_mid, "money_over_threshold") not in got
+    assert (sched, "unattended_irreversible") not in got
+    assert (burst[2], "irreversible_burst") in got and (burst[1], "irreversible_burst") not in got
+    assert save_settings(conn, {"money_threshold": ["abc"], "money_scope": ["bogus"], "burst_threshold": ["1"]}, "marc")["burst_threshold"] == 2
+    conn.close()
+
+
+def test_rules_form_on_the_alerts_page(tmp_path):
+    from statement import create_app
+    db = tmp_path / "t.db"
+    connect(db).close()
+    client = create_app(db).test_client()
+    html = client.get("/alerts").get_data(as_text=True)
+    assert 'name="money_threshold" value="100"' in html and '<option value="agent" selected>' in html and "Save rules" in html
+    resp = client.post("/alerts/rules", data={"money_threshold": "500", "money_scope": "all", "burst_threshold": "8",
+                                              "on.unknown_attribution": ["0"], "on.money_over_threshold": ["0", "1"]})
+    assert resp.status_code == 302 and resp.headers["Location"].endswith("/alerts?saved=1")
+    html = client.get("/alerts?saved=1").get_data(as_text=True)
+    assert "<b>Saved.</b>" in html and 'name="money_threshold" value="500"' in html and '<option value="all" selected>' in html
+    assert 'name="burst_threshold" value="8"' in html
+    assert 'name="on.unknown_attribution" value="1">' in html and 'name="on.unknown_attribution" value="1" checked' not in html
+    cfg = settings(connect(db))
+    assert cfg["money_threshold"] == 500.0 and cfg["money_scope"] == "all" and cfg["on.unknown_attribution"] is False

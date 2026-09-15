@@ -12,7 +12,8 @@ from flask import Flask, Response, abort, redirect, render_template, request
 from agents import display as agent_display_fn
 from agents import history as agent_history, known_identities, list_agents, nicknames, restore, retire, set_nickname
 from agents import retired as retired_agents
-from alerts import mark_seen, unseen, unseen_action_ids, unseen_count
+from alerts import RULES, mark_seen, save_settings, unseen, unseen_action_ids, unseen_count
+from alerts import settings as alert_settings
 from doctor import status as machine_status
 from export import export_csv, money_csv
 from config import ramp_settings
@@ -268,10 +269,21 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         try:
             items = unseen(conn)
             integrity = status_line(conn)
+            rules = alert_settings(conn)
         finally:
             conn.close()
         return render_template("alerts.html", items=items, coverage_notes=coverage_notes(),
-                               integrity=integrity)
+                               integrity=integrity, rules=rules, rule_names=RULES,
+                               saved=request.args.get("saved") == "1")
+
+    @app.route("/alerts/rules", methods=["POST"])
+    def alerts_rules():
+        conn = db()
+        try:
+            save_settings(conn, {k: request.form.getlist(k) for k in request.form}, current_user())
+        finally:
+            conn.close()
+        return redirect("/alerts?saved=1")
 
     @app.route("/alerts/seen", methods=["POST"])
     def alerts_seen():

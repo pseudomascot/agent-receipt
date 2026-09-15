@@ -21,11 +21,95 @@ FRESH_SECONDS = 24 * 3600      # only notify for actions this recent; older ones
 
 RULES = {
     "unattended_irreversible": "an irreversible action with nobody at the keyboard",
-    "irreversible_burst": f"{BURST_THRESHOLD}+ irreversible actions by one agent within an hour",
-    "money_over_threshold": f"a payment over {MONEY_THRESHOLD:.0f}",
+    "irreversible_burst": "several irreversible actions by one agent within an hour",
+    "money_over_threshold": "a payment over the threshold set in Alert rules",
     "unknown_attribution": "an action nobody can be confirmed for",
     "retired_agent_acted": "an action by an agent after it was retired on the Agents page",
 }
+
+# Adjustable from the Needs review page; stored in `meta` under "alert.<key>". Changing them
+# is recorded on the receipt and affects actions evaluated from then on (old alerts stay).
+DEFAULTS = {
+    "money_threshold": MONEY_THRESHOLD,   # amount, in the row's own currency
+    "money_scope": "agent",               # "agent": not a person's own purchase (agent or unconfirmed); "all": anyone's
+    "burst_threshold": BURST_THRESHOLD,   # irreversible actions per hour by one agent
+    **{f"on.{rule}": True for rule in RULES},
+}
+SCOPES = ("agent", "all")
+
+
+def settings(conn: sqlite3.Connection) -> dict:
+    """Current rule settings: defaults overridden by whatever is stored in meta."""
+    cfg = dict(DEFAULTS)
+    for key, value in conn.execute("SELECT key, value FROM meta WHERE key LIKE 'alert.%'"):
+        name = key[len("alert."):]
+        if name not in cfg:
+            continue
+        try:
+            if name == "money_threshold":
+                cfg[name] = float(value)
+            elif name == "burst_threshold":
+                cfg[name] = int(value)
+            elif name == "money_scope":
+                cfg[name] = value if value in SCOPES else cfg[name]
+            else:
+                cfg[name] = value == "1"
+        except ValueError:
+            pass
+    return cfg
+
+
+def describe_settings(cfg: dict) -> str:
+    on = [r for r in RULES if cfg.get(f"on.{r}")]
+    off = [r.replace("_", " ") for r in RULES if not cfg.get(f"on.{r}")]
+    parts = [f"payment over {cfg['money_threshold']:,.2f} ({'not a person' if cfg['money_scope'] == 'agent' else 'anyone'})",
+             f"{cfg['burst_threshold']}+ irreversible actions in an hour"]
+    if off:
+        parts.append("off: " + ", ".join(off))
+    return "; ".join(parts) + f"; {len(on)} of {len(RULES)} rules on"
+
+
+def save_settings(conn: sqlite3.Connection, form: dict, user: str) -> dict:
+    """Apply a settings form ({key: value-or-list}); records the change on the receipt if anything moved."""
+    from agents import INSERT, RECEIPT_AGENT
+    before = settings(conn)
+    new = dict(before)
+
+    def last(key):
+        v = form.get(key)
+        if isinstance(v, (list, tuple)):
+            return v[-1] if v else None
+        return v
+    if last("money_threshold") not in (None, ""):
+        try:
+            new["money_threshold"] = max(0.0, float(str(last("money_threshold")).replace(",", "")))
+        except ValueError:
+            pass
+    if last("burst_threshold") not in (None, ""):
+        try:
+            new["burst_threshold"] = max(2, int(float(last("burst_threshold"))))
+        except ValueError:
+            pass
+    if last("money_scope") in SCOPES:
+        new["money_scope"] = last("money_scope")
+    for rule in RULES:
+        v = last(f"on.{rule}")
+        if v is not None:
+            new[f"on.{rule}"] = str(v).lower() in ("1", "true", "on", "yes")
+    if new == before:
+        return before
+    for key, value in new.items():
+        stored = ("1" if value else "0") if isinstance(value, bool) else str(value)
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"alert.{key}", stored))
+    now = time.time()
+    conn.execute(INSERT, (
+        now, RECEIPT_AGENT, user, "input", "other", f"Changed alert rules: {describe_settings(new)}", 1, "human",
+        "the Alert rules form was saved in Agent Receipt; reversibility: can be changed again",
+        json.dumps({"source": "agent-receipt", "tool": "agent-receipt:rules", "before": before, "after": new}),
+        f"agent-receipt:rules:{now:.3f}",
+    ))
+    conn.commit()
+    return new
 
 
 def _unattended(row: dict) -> bool:
@@ -45,12 +129,15 @@ def evaluate(conn: sqlite3.Connection) -> list[dict]:
     ).fetchall()
     cols = ["id", "timestamp", "agent", "action_type", "target", "amount", "currency",
             "reversible", "attribution", "confidence_note", "raw_json"]
+    cfg = settings(conn)
     new = []
     max_id = last_id
     for r in rows:
         a = dict(zip(cols, r))
         max_id = max(max_id, a["id"])
-        for rule, message in _matches(conn, a):
+        for rule, message in _matches(conn, a, cfg):
+            if not cfg.get(f"on.{rule}", True):
+                continue
             cur = conn.execute(
                 "INSERT OR IGNORE INTO alerts (action_id, rule, message, created_at) VALUES (?, ?, ?, ?)",
                 (a["id"], rule, message, time.time()),
@@ -72,7 +159,8 @@ def _what(a: dict) -> str:
                     {"amount": a.get("amount"), "currency": a.get("currency")})
 
 
-def _matches(conn: sqlite3.Connection, a: dict):
+def _matches(conn: sqlite3.Connection, a: dict, cfg: dict | None = None):
+    cfg = cfg or DEFAULTS
     if a["reversible"] == 0 and _unattended(a):
         yield "unattended_irreversible", f"{a['agent']}, unattended: {_short(_what(a))}"
     if a["reversible"] == 0:
@@ -81,9 +169,12 @@ def _matches(conn: sqlite3.Connection, a: dict):
             "AND timestamp > ? AND timestamp <= ?",
             (a["agent"], a["timestamp"] - BURST_WINDOW_SECONDS, a["timestamp"]),
         ).fetchone()[0]
-        if n >= BURST_THRESHOLD:
+        if n >= cfg["burst_threshold"]:
             yield "irreversible_burst", f"{a['agent']}: {n} irreversible actions in the last hour"
-    if a["amount"] is not None and a["amount"] > MONEY_THRESHOLD:
+    # Scope "agent" = anything that is not a person's own purchase: the agent's, or one
+    # nobody can be confirmed for. A named person's card purchase is their business.
+    if (a["amount"] is not None and a["amount"] > cfg["money_threshold"]
+            and (cfg["money_scope"] == "all" or a["attribution"] != "human")):
         yield "money_over_threshold", f"{a['agent']}: {_short(_what(a))}"
     if a["attribution"] == "unknown":
         yield "unknown_attribution", f"nobody can be confirmed for: {_short(_what(a))}"

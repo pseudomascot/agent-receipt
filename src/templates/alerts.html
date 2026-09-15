@@ -33,13 +33,43 @@
 </section>
 
 <section class="card" data-section="rules">
-<h2>The rules</h2>
-<ul class="note" style="margin:0; padding-left:18px">
-  <li><b>unattended irreversible</b> — something that can't be undone (deleted files, code pushed, data sent to a server…) by a scheduled task, or while nobody had touched the keyboard or mouse for 30 seconds.</li>
-  <li><b>irreversible burst</b> — five or more irreversible actions by one agent within an hour.</li>
-  <li><b>money over threshold</b> — any payment or charge over 100.</li>
-  <li><b>unknown attribution</b> — an action neither an agent's log nor keyboard activity can account for.</li>
-  <li><b>retired agent acted</b> — an agent that was retired on the Agents page did something afterwards.</li>
+<h2>Alert rules</h2>
+{% if saved %}<div class="note" style="margin-bottom:8px"><b>Saved.</b> The change is on today's receipt; it applies to actions from now on — items already listed above stay until you mark them seen.</div>{% endif %}
+<form method="post" action="/alerts/rules" class="screen-only">
+<table class="compact" style="width:100%">
+  <tr>
+    <td style="width:24px"><input type="hidden" name="on.unattended_irreversible" value="0"><input type="checkbox" name="on.unattended_irreversible" value="1"{% if rules['on.unattended_irreversible'] %} checked{% endif %}></td>
+    <td><b>unattended irreversible</b> — something that can't be undone (deleted files, code pushed, data sent to a server…) by a scheduled task, or while nobody had touched the keyboard or mouse for 30 seconds.</td>
+  </tr>
+  <tr>
+    <td><input type="hidden" name="on.irreversible_burst" value="0"><input type="checkbox" name="on.irreversible_burst" value="1"{% if rules['on.irreversible_burst'] %} checked{% endif %}></td>
+    <td><b>irreversible burst</b> — <input type="number" name="burst_threshold" value="{{ rules.burst_threshold }}" min="2" step="1" style="width:64px; padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit"> or more irreversible actions by one agent within an hour.</td>
+  </tr>
+  <tr>
+    <td><input type="hidden" name="on.money_over_threshold" value="0"><input type="checkbox" name="on.money_over_threshold" value="1"{% if rules['on.money_over_threshold'] %} checked{% endif %}></td>
+    <td><b>money over threshold</b> — any payment or charge over
+      <input type="number" name="money_threshold" value="{{ '%g'|format(rules.money_threshold) }}" min="0" step="1" style="width:92px; padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit">
+      by
+      <select name="money_scope" style="padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit">
+        <option value="agent"{% if rules.money_scope == 'agent' %} selected{% endif %}>an agent, or nobody can be confirmed</option>
+        <option value="all"{% if rules.money_scope == 'all' %} selected{% endif %}>anyone, people included</option>
+      </select>.
+      <span class="note">The first keeps a person's own card purchases off this list.</span></td>
+  </tr>
+  <tr>
+    <td><input type="hidden" name="on.unknown_attribution" value="0"><input type="checkbox" name="on.unknown_attribution" value="1"{% if rules['on.unknown_attribution'] %} checked{% endif %}></td>
+    <td><b>unknown attribution</b> — an action neither an agent's log nor keyboard activity can account for.</td>
+  </tr>
+  <tr>
+    <td><input type="hidden" name="on.retired_agent_acted" value="0"><input type="checkbox" name="on.retired_agent_acted" value="1"{% if rules['on.retired_agent_acted'] %} checked{% endif %}></td>
+    <td><b>retired agent acted</b> — an agent that was retired on the Agents page did something afterwards.</td>
+  </tr>
+</table>
+<div style="margin-top:10px"><button type="submit" class="btn primary">Save rules</button> <span class="note">Every save is a line on the receipt.</span></div>
+</form>
+<ul class="note print-only" style="margin:0; padding-left:18px">
+  {% for rule, text in rule_names.items() %}<li><b>{{ rule.replace('_', ' ') }}</b> — {{ text }}{% if not rules['on.' ~ rule] %} (off){% endif %}</li>{% endfor %}
+  <li>Threshold {{ '%g'|format(rules.money_threshold) }} ({{ 'not a person' if rules.money_scope == 'agent' else 'anyone' }}); burst {{ rules.burst_threshold }}/hour.</li>
 </ul>
 </section>
 {% endblock %}
