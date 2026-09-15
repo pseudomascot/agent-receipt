@@ -28,16 +28,20 @@ STATIC_COVERAGE = [
 
 
 def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None,
-                   calendar_on: bool | None = None) -> list:
-    if email_on is None or stripe_on is None or calendar_on is None:
-        from config import calendar_configured, email_configured, stripe_configured
+                   calendar_on: bool | None = None, google_on: bool | None = None) -> list:
+    if email_on is None or stripe_on is None or calendar_on is None or google_on is None:
+        from config import calendar_configured, email_configured, google_calendar_configured, stripe_configured
         email_on = email_configured() if email_on is None else email_on
         stripe_on = stripe_configured() if stripe_on is None else stripe_on
         calendar_on = calendar_configured() if calendar_on is None else calendar_on
+        google_on = google_calendar_configured() if google_on is None else google_on
     dynamic = [
         ("Calendar (the macOS Calendar app and everything it syncs)", "covered" if calendar_on else "not covered",
-         "Events created, changed, or deleted, read locally through Apple's EventKit." if calendar_on
+         "Events created, changed, or deleted, read locally by asking the Calendar app." if calendar_on
          else "Set RECEIPT_CALENDAR=on in .env (docs/CALENDAR.md)."),
+        ("Google Calendar (the agent's Google account)", "covered" if google_on else "not covered",
+         "Events with real creation times; events created by an agent account are attributed to it." if google_on
+         else "Needs a Google OAuth client and a one-time sign-in (docs/GOOGLE_CALENDAR.md)."),
         ("Email sent from the agent's mailbox", "covered" if email_on else "not covered",
          "Polled read-only over IMAP from the mailbox in .env." if email_on
          else "Set RECEIPT_IMAP_USER / RECEIPT_IMAP_PASSWORD in .env (docs/EMAIL.md)."),
@@ -53,8 +57,9 @@ def coverage_notes(email_on: bool | None = None, stripe_on: bool | None = None,
 
 
 def not_covered(email_on: bool | None = None, stripe_on: bool | None = None,
-                calendar_on: bool | None = None) -> list:
-    return [name for name, status, _ in coverage_notes(email_on, stripe_on, calendar_on) if status == "not covered"]
+                calendar_on: bool | None = None, google_on: bool | None = None) -> list:
+    return [name for name, status, _ in coverage_notes(email_on, stripe_on, calendar_on, google_on)
+            if status == "not covered"]
 ACTION_TYPES = ("send_email", "create_event", "purchase", "file_write", "post", "execute", "other")
 TYPE_LABELS = {
     "file_write": "File edits", "execute": "Commands run", "send_email": "Emails sent",

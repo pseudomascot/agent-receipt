@@ -79,3 +79,19 @@ def calendar_settings(env: dict | None = None) -> dict | None:
 
 def calendar_configured() -> bool:
     return calendar_settings() is not None
+
+
+def google_calendar_settings(env: dict | None = None) -> dict | None:
+    """Google Calendar API settings, or None unless an OAuth client is configured."""
+    env = env if env is not None else load_env()
+    client_id, secret = env.get("RECEIPT_GOOGLE_CLIENT_ID"), env.get("RECEIPT_GOOGLE_CLIENT_SECRET")
+    if not client_id or not secret or "PASTE" in client_id:
+        return None
+    calendars = [c.strip() for c in (env.get("RECEIPT_GOOGLE_CALENDARS") or "primary").split(",") if c.strip()]
+    emails = [e.strip() for e in (env.get("RECEIPT_GOOGLE_AGENT_EMAILS") or "").split(",") if e.strip()]
+    return {"client_id": client_id, "client_secret": secret, "calendars": calendars or ["primary"],
+            "agent_emails": emails, "agent": env.get("RECEIPT_GOOGLE_CALENDAR_AGENT") or "google calendar"}
+
+
+def google_calendar_configured() -> bool:
+    return google_calendar_settings() is not None

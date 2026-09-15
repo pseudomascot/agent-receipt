@@ -134,8 +134,10 @@ def sync(conn: sqlite3.Connection, settings: dict, events: list[dict], user: str
     agent = settings["agent"]
     now = time.time()
     first_run = conn.execute("SELECT 1 FROM meta WHERE key = 'calendar_baselined'").fetchone() is None
+    # Only this connector's entries; Google Calendar keeps its own under "gcal:".
     seen = {row[0]: row for row in conn.execute(
-        "SELECT identifier, title, start, modified, calendar FROM calendar_seen").fetchall()}
+        "SELECT identifier, title, start, modified, calendar FROM calendar_seen "
+        "WHERE identifier NOT LIKE 'gcal:%'").fetchall()}
     counts = {"created": 0, "changed": 0, "deleted": 0, "tracked": len(events)}
     current_ids = set()
 
