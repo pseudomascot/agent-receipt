@@ -187,7 +187,10 @@ def test_stop_controls_and_agents_page_for_a_fund(tmp_path):
 def test_agents_card_route(tmp_path, monkeypatch):
     import statement as statement_module
     db = tmp_path / "t.db"
-    connect(db).close()
+    conn = connect(db)
+    conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+                 "VALUES (1, 'claude-code', 'marc', 'log', 'file_write', 'x', 'agent', 'n', '{}')")
+    conn.commit(); conn.close()
     monkeypatch.setattr(statement_module, "ramp_settings", lambda: ramp_settings(ENV))
     issued = []
     monkeypatch.setattr(statement_module, "issue_fund",

@@ -100,14 +100,14 @@ def test_agents_page_and_form(tmp_path):
     resp = client.post("/agents/status", data={"agent": "claude-code", "action": "retire", "note": "noisy"})
     assert resp.status_code == 302 and resp.headers["Location"].endswith("/agents")
     html = client.get("/agents").get_data(as_text=True)
-    assert 'class="retired"' in html and "Retired agent: claude-code — noisy" in html and "Restore" in html
+    assert 'class="agent-row retired"' in html and "Retired agent: claude-code — noisy" in html and "Restore" in html
     assert "Claude Code · retired" in client.get("/day/2026-09-14").get_data(as_text=True)   # chip label
     day = client.get(f"/day/{datetime.now().date().isoformat()}").get_data(as_text=True)
     assert "Retired agent: claude-code" in day                                   # the press is on the statement
 
     client.post("/agents/status", data={"agent": "claude-code", "action": "restore"})
     html = client.get("/agents").get_data(as_text=True)
-    assert 'class="retired"' not in html and "Restored agent: claude-code" in html
+    assert 'class="agent-row retired"' not in html and "Restored agent: claude-code" in html
     client.post("/agents/status", data={"agent": "", "action": "retire"})      # ignored
     client.post("/agents/status", data={"agent": "claude-code", "action": "bogus"})
     assert not retired(connect(db))
@@ -150,7 +150,7 @@ def test_nickname_flows_everywhere(tmp_path):
     csv_text = client.get("/export.csv?start=2026-09-14&end=2026-09-14").get_data(as_text=True)
     assert "mailbox bot@example.com,Bookkeeping bot,sam" in csv_text                              # raw + label columns
     html = client.get("/agents").get_data(as_text=True)
-    assert "<b>Bookkeeping bot</b>" in html and 'value="Bookkeeping bot"' in html
+    assert '>Bookkeeping bot</b>' in html and 'value="Bookkeeping bot"' in html
     client.post("/agents/name", data={"agent": "mailbox bot@example.com", "nickname": ""})        # clear
     assert "Bookkeeping bot" not in client.get("/day/2026-09-14").get_data(as_text=True)
     assert "Cleared the name of agent: mailbox bot@example.com" in client.get("/agents").get_data(as_text=True)

@@ -13,66 +13,71 @@
 <section class="card" data-section="agents">
 <h2>Who has acted on this Mac</h2>
 <div class="note" style="margin-bottom:12px">
-  Identities come from the agents' own logs, from credentials the receipt reads (a mailbox, a card, a Google account),
-  or from what an agent declares through the inbox — they are observed, not issued.
-  Give an agent a name of your own ("Bookkeeping bot") and that name is used on every statement, alert and export; the log's own label stays underneath.
-  {% if ramp_mode %}<b>Give a card</b> hands an agent its own Ramp fund — a budget that issues a virtual card — so its purchases are its own by construction and can be cut off on their own ({{ ramp_mode }}; docs/RAMP.md).{% endif %}
-  <b>Retire</b> says "from now on this agent is not supposed to act": nothing it did is removed or hidden,
-  its rows stay on every statement, and anything it does afterwards is flagged for review.
-  Retiring does not stop the agent — that takes revoking its mailbox, card or account at the issuer.
+  Hover a name or a badge for the full description; <b>Details</b> opens naming, card and retire controls.
+  Identities are observed, not issued. <b>Retire</b> records "from now on this agent is not supposed to act" — nothing is removed, anything it does afterwards is flagged; it does not stop the agent.
+  {% if ramp_mode %}<b>Give a card</b> hands an agent its own Ramp fund ({{ ramp_mode }}; docs/RAMP.md).{% endif %}
 </div>
 {% if agents %}
-<table>
-  <tr><th>Agent</th><th>What it is</th><th style="width:110px">First seen</th><th style="width:110px">Last seen</th><th style="width:210px">Actions</th><th style="width:100px">Needs review</th><th style="width:250px">Status</th></tr>
+<table class="agents">
+  <tr><th>Agent</th><th style="width:118px">What it is</th><th style="width:96px">First seen</th><th style="width:96px">Last seen</th><th style="width:84px; text-align:right">Actions</th><th style="width:70px; text-align:right">Review</th><th style="width:150px">Status</th><th style="width:88px"></th></tr>
   {% for a in agents %}
-  <tr{% if a.retired %} class="retired"{% endif %}>
-    <td><b>{{ a.label }}</b>
-      <div class="note">{{ a.sub }}{% if a.users %} · {{ a.users|join(', ') }}{% endif %}</div>
-      {% if a.name != a.label %}<div class="raw" title="The label in the agent's own log">{{ a.name }}</div>{% endif %}
-      <form method="post" action="/agents/name" class="screen-only" style="margin-top:6px; display:flex; gap:6px">
-        <input type="hidden" name="agent" value="{{ a.name }}">
-        <input type="text" name="nickname" value="{{ a.nickname }}" placeholder="give it a name" maxlength="60" style="flex:1; min-width:100px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
-        <button type="submit" class="btn">Save</button>
-      </form></td>
-    <td><span class="pill type">{{ a.kind }}</span><div class="note">{{ a.what }}</div></td>
-    <td class="time">{{ a.first_seen or '—' }}</td>
-    <td class="time">{{ a.last_seen or '—' }}</td>
-    <td>{% if a.total %}<a href="/all?agent={{ a.name|urlencode }}#actions">{{ a.total }}</a>
-      <div class="note">{% for t, n in a.by_type|dictsort(by='value', reverse=true) %}{{ type_label(t)|lower }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
-      {% if a.irreversible or a.money %}<div class="note">{% if a.irreversible %}{{ a.irreversible }} can't be undone{% endif %}{% if a.irreversible and a.money %} · {% endif %}{% if a.money %}{{ a.money }} with money{% endif %}</div>{% endif %}
-      {% else %}<span class="note">nothing yet</span>{% endif %}</td>
-    <td>{% if a.open_alerts %}<a href="/alerts" class="pill unknown">{{ a.open_alerts }}</a>{% else %}<span class="note">0</span>{% endif %}</td>
-    <td>
-      {% if a.fund %}
-      <div style="margin-bottom:6px"><span class="pill {{ 'covered' if a.fund.state == 'ACTIVE' else 'not' }}" title="Ramp fund {{ a.fund.fund_id }}">Ramp card{% if a.fund.last4 %} •••• {{ a.fund.last4 }}{% endif %} · {{ a.fund.state|lower }}</span>
-        <div class="note">{{ '%.2f'|format(a.fund.limit) }} {{ a.fund.currency }} per {{ a.fund.interval }} · <a href="/stop">suspend or terminate on the Stop page</a></div></div>
-      {% elif ramp_mode and not a.retired %}
-      <form method="post" action="/agents/card" class="screen-only" style="margin-bottom:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center"
-            onsubmit="return confirm('Give {{ a.label|e }} its own Ramp card ({{ ramp_mode }}) with this budget?')">
-        <input type="hidden" name="agent" value="{{ a.name }}">
-        <span class="note">Ramp card:</span>
-        <input type="number" name="limit" min="1" step="1" value="100" style="width:72px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px" title="budget in USD">
-        <select name="interval" style="padding:5px 6px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
-          <option value="MONTHLY">per month</option><option value="DAILY">per day</option><option value="WEEKLY">per week</option><option value="TOTAL">in total</option>
-        </select>
-        <button type="submit" class="btn"{% if not ramp_ready %} disabled title="Set RECEIPT_RAMP_USER_ID in .env first (docs/RAMP.md)"{% endif %}>Give a card</button>
-      </form>
-      {% endif %}
-      {% if a.retired %}
-      <span class="pill not">retired</span> <span class="note">{{ a.retired.when }}{% if a.retired.by_user %} by {{ a.retired.by_user }}{% endif %}</span>
-      {% if a.retired.note %}<div class="note">{{ a.retired.note }}</div>{% endif %}
-      <form method="post" action="/agents/status" class="screen-only" style="margin-top:6px">
-        <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="restore">
-        <button type="submit" class="btn">Restore</button>
-      </form>
-      {% else %}
-      <span class="pill covered">active</span>
-      <form method="post" action="/agents/status" class="screen-only" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">
-        <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="retire">
-        <input type="text" name="note" placeholder="why (optional)" maxlength="200" style="flex:1; min-width:110px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
-        <button type="submit" class="btn" onclick="return confirm('Retire {{ a.name|e }}? Its history stays; anything it does from now on is flagged.')">Retire</button>
-      </form>
-      {% endif %}
+  {% set breakdown = [] %}{% for t, n in a.by_type|dictsort(by='value', reverse=true) %}{% set _ = breakdown.append(type_label(t)|lower ~ ' ' ~ n) %}{% endfor %}
+  <tr class="agent-row{% if a.retired %} retired{% endif %}" data-agent-row>
+    <td><b title="{{ a.name }}">{{ a.label }}</b>{% if a.users %} <span class="note">· {{ a.users|join(', ') }}</span>{% endif %}
+      <div class="note ellipsis" title="{{ a.sub }}">{{ a.sub }}</div></td>
+    <td><span class="pill type" title="{{ a.what }}">{{ a.kind }}</span></td>
+    <td class="time" title="{{ a.first_seen }}">{{ a.first_seen[:10] or '—' }}</td>
+    <td class="time" title="{{ a.last_seen }}">{{ a.last_seen[:10] or '—' }}</td>
+    <td style="text-align:right">{% if a.total %}<a href="/all?agent={{ a.name|urlencode }}#actions" title="{{ breakdown|join(', ') }}{% if a.irreversible %} · {{ a.irreversible }} can't be undone{% endif %}{% if a.money %} · {{ a.money }} with money{% endif %}">{{ a.total }}</a>{% else %}<span class="note" title="nothing yet">0</span>{% endif %}</td>
+    <td style="text-align:right">{% if a.open_alerts %}<a href="/alerts" class="pill unknown">{{ a.open_alerts }}</a>{% else %}<span class="note">0</span>{% endif %}</td>
+    <td>{% if a.retired %}<span class="pill not" title="{{ a.retired.when }}{% if a.retired.by_user %} by {{ a.retired.by_user }}{% endif %}{% if a.retired.note %} — {{ a.retired.note }}{% endif %}">retired</span>{% else %}<span class="pill covered">active</span>{% endif %}
+      {% if a.fund %} <span class="pill {{ 'type' if a.fund.state == 'ACTIVE' else 'not' }}" title="Ramp fund {{ a.fund.fund_id }}: {{ '%.2f'|format(a.fund.limit) }} {{ a.fund.currency }} per {{ a.fund.interval }} · {{ a.fund.state|lower }}">card{% if a.fund.last4 %} •••• {{ a.fund.last4 }}{% endif %}</span>{% endif %}</td>
+    <td class="screen-only"><button type="button" class="btn small" data-toggle-details>Details</button></td>
+  </tr>
+  <tr class="details hidden" data-details>
+    <td colspan="8">
+      <div class="details-grid">
+        <div>
+          <div class="note"><b>Label in its own log</b></div>
+          <div class="raw">{{ a.name }}</div>
+          <div class="note" style="margin-top:6px"><b>What it is</b> — {{ a.what }}</div>
+          {% if a.total %}<div class="note" style="margin-top:6px"><b>Actions</b> — {{ breakdown|join(', ') }}{% if a.irreversible %}; {{ a.irreversible }} can't be undone{% endif %}{% if a.money %}; {{ a.money }} with money{% endif %}</div>{% endif %}
+          {% if a.retired %}<div class="note" style="margin-top:6px"><b>Retired</b> {{ a.retired.when }}{% if a.retired.by_user %} by {{ a.retired.by_user }}{% endif %}{% if a.retired.note %} — {{ a.retired.note }}{% endif %}</div>{% endif %}
+          {% if a.fund %}<div class="note" style="margin-top:6px"><b>Ramp card</b>{% if a.fund.last4 %} •••• {{ a.fund.last4 }}{% endif %} — {{ '%.2f'|format(a.fund.limit) }} {{ a.fund.currency }} per {{ a.fund.interval }}, {{ a.fund.state|lower }} · <a href="/stop">suspend or terminate on the Stop page</a></div>{% endif %}
+        </div>
+        <div class="screen-only">
+          <form method="post" action="/agents/name" class="inline-form">
+            <input type="hidden" name="agent" value="{{ a.name }}">
+            <span class="note">Name</span>
+            <input type="text" name="nickname" value="{{ a.nickname }}" placeholder="give it a name" maxlength="60">
+            <button type="submit" class="btn small">Save</button>
+          </form>
+          {% if ramp_mode and not a.fund and not a.retired and a.kind in ('local agent', 'sub-agent', 'declared') %}
+          <form method="post" action="/agents/card" class="inline-form" onsubmit="return confirm('Give {{ a.label|e }} its own Ramp card ({{ ramp_mode }}) with this budget?')">
+            <input type="hidden" name="agent" value="{{ a.name }}">
+            <span class="note">Ramp card</span>
+            <input type="number" name="limit" min="1" step="1" value="100" style="width:72px" title="budget in USD">
+            <select name="interval">
+              <option value="MONTHLY">per month</option><option value="DAILY">per day</option><option value="WEEKLY">per week</option><option value="TOTAL">in total</option>
+            </select>
+            <button type="submit" class="btn small"{% if not ramp_ready %} disabled title="Set RECEIPT_RAMP_USER_ID in .env first (docs/RAMP.md)"{% endif %}>Give a card</button>
+          </form>
+          {% endif %}
+          {% if a.retired %}
+          <form method="post" action="/agents/status" class="inline-form">
+            <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="restore">
+            <span class="note">Retired</span><button type="submit" class="btn small">Restore</button>
+          </form>
+          {% else %}
+          <form method="post" action="/agents/status" class="inline-form">
+            <input type="hidden" name="agent" value="{{ a.name }}"><input type="hidden" name="action" value="retire">
+            <span class="note">Retire</span>
+            <input type="text" name="note" placeholder="why (optional)" maxlength="200">
+            <button type="submit" class="btn small" onclick="return confirm('Retire {{ a.label|e }}? Its history stays; anything it does from now on is flagged.')">Retire</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
     </td>
   </tr>
   {% endfor %}
@@ -95,4 +100,32 @@
 <div class="empty">Nothing retired or restored so far.</div>
 {% endif %}
 </section>
+
+<style>
+  table.agents td { padding: 8px 10px; }
+  table.agents tr.agent-row td { cursor: default; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+  .btn.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; }
+  tr.details td { background: var(--line-soft); border-bottom: 1px solid var(--line); }
+  .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+  @media (max-width: 800px) { .details-grid { grid-template-columns: 1fr; } .ellipsis { max-width: 200px; } }
+  .inline-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; }
+  .inline-form .note { min-width: 72px; }
+  .inline-form input[type=text], .inline-form input[type=number], .inline-form select {
+    padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-size: 13px; }
+  .inline-form input[type=text] { flex: 1; min-width: 120px; }
+</style>
+<script>
+  document.querySelectorAll("[data-toggle-details]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var row = btn.closest("tr").nextElementSibling;
+      var open = row.classList.toggle("hidden");
+      btn.textContent = open ? "Details" : "Close";
+    });
+  });
+  document.querySelectorAll("[data-agent-row] td:first-child").forEach(function (cell) {
+    cell.style.cursor = "pointer";
+    cell.addEventListener("click", function () { cell.closest("tr").querySelector("[data-toggle-details]").click(); });
+  });
+</script>
 {% endblock %}
