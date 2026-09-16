@@ -94,6 +94,8 @@ Earlier steps: steps 1-3 done. Step 2 (input monitor) verified live: 41 real eve
 Permission note: the process tree for this Claude Code session runs through `/Applications/Claude.app` (not Terminal.app) — that's the app that needed Accessibility access for the input monitor, and it's what Marc granted.
 
 ## Next step
+**Candidate (noted 2026-09-16, not started): Windows support.** Core already portable (SQLite, parsers, statement, alerts, connectors, pynput). Mac-only pieces to replace: `.command`/`.app` launchers (→ `Setup.bat` / PowerShell), rumps menu bar (→ pystray tray icon, or "core only" first with no tray), `osascript` notifications (→ Windows toast), Mac Calendar connector (→ "not covered"), Stop page `pgrep`/`pkill` (→ `tasklist`/`taskkill`), `open` calls, Accessibility guidance (not needed on Windows), and verify Cowork's transcript path on Windows (Claude Code and Codex use the same home-folder layout). Estimate ~2 days plus testing on a real PC. Do it when a Windows user asks.
+
 Let it run for a week (Marc double-clicks `Agent Receipt.command` whenever he's working; closing the window stops it). Review together around 2026-09-21: read the daily summaries, look for wrong or missing lines, decide on the Bash-always-counts and browser_batch judgment calls, and whether to keep the 30s window. Then v2 planning (email / card / wallet connectors, Twilio summary).
 
 ## Blockers
