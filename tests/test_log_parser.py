@@ -499,6 +499,7 @@ def test_cursor_source_reads_its_agent_transcripts(tmp_path, monkeypatch):
     assert "Cursor transcript" in actions[0]["confidence_note"] and "minute precision" in actions[0]["confidence_note"]
     raw = json.loads(actions[0]["raw_json"])
     assert raw["source"] == "cursor" and raw["session_id"] == "e1838abb" and raw["cwd"].endswith("cursor-test")
+    assert raw.get("project") is None                      # the folder is the project, never the chat's title
     assert [p.name for p in find_transcripts(tmp_path / "projects", log_parser.CURSOR)] == ["e1838abb.jsonl"]
 
     # No state db, no timestamp tag: still parsed, dated by the file's mtime, plain "cursor" label.

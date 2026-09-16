@@ -32,7 +32,7 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "10"
+RULES_VERSION = "11"
 
 ACTION_TYPES = {"send_email", "create_event", "purchase", "file_write", "post", "execute", "other"}
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
@@ -305,7 +305,8 @@ def _cursor_unsanitize(name: str) -> str:
 
 def _cursor_meta(path: Path) -> dict:
     """Per-transcript facts: the folder it ran in, and (from Cursor's state db) the model and title."""
-    meta = {"conversation_id": path.stem, "cwd": None, "model": None, "title": None, "mtime": None}
+    # "conversation_title" on purpose, not "title": the project label must be the folder, not the chat's name.
+    meta = {"conversation_id": path.stem, "cwd": None, "model": None, "conversation_title": None, "mtime": None}
     try:
         project_dir = path.parent.parent.parent.name          # <project>/agent-transcripts/<id>/<id>.jsonl
         if project_dir and project_dir != "empty-window":
@@ -323,7 +324,7 @@ def _cursor_meta(path: Path) -> dict:
                 conn.close()
             if row:
                 data = json.loads(row[0])
-                meta["title"] = data.get("name")
+                meta["conversation_title"] = data.get("name")
                 meta["model"] = ((data.get("modelConfig") or {}).get("modelName")) or None
         except (sqlite3.Error, ValueError, OSError):
             pass
