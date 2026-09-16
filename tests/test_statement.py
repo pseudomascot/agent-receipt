@@ -262,5 +262,18 @@ def test_summary_is_linked_and_project_filter_works(tmp_path):
     html = client.get(f"/day/{DAY}?project=proj-a").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html and "git commit -m hi" not in html
     assert "Filtered:" in html and "project: proj-a" in html and "2 of 4 actions" in html
-    assert 'href="/day/2026-09-14?type=execute&amp;project=proj-a#actions"' in html        # type link keeps the project
+    assert 'href="/day/2026-09-14?type=execute&project=proj-a#actions"' in html            # type link keeps the project
     assert "/export.csv?start=2026-09-14&end=2026-09-14&amp;project=proj-a" in html   # literal & stays, variable & is escaped
+
+
+def test_summary_folds_long_lists(tmp_path):
+    db = tmp_path / "t.db"
+    conn = connect(db)
+    for i in range(8):
+        conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+                     "VALUES (?, ?, 'marc', 'log', 'file_write', 'f', 'agent', 'agent log', ?)", (T + i, f"bot-{i}", _raw(f"/Users/marc/p{i}")))
+    conn.commit(); conn.close()
+    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    assert html.count('data-more>+3 more</a>') == 2                                    # projects and agents fold after 5
+    assert '<span class="more hidden">, <a href="/day/2026-09-14?project=' in html and 'p7 (1)</a>' in html
+    assert "Log integrity: Log integrity" not in html

@@ -40,25 +40,48 @@
 <section class="card" data-section="summary">
 <h2>{% if single_day %}Daily summary{% else %}Summary{% endif %}</h2>
 <pre class="summary print-only">{{ summary }}</pre>
+{% set SHOW = 5 %}
+{% macro more_list(items, sep=', ') -%}
+  {%- for html in items[:SHOW] %}{{ html }}{% if not loop.last %}{{ sep }}{% endif %}{% endfor -%}
+  {%- if items|length > SHOW %}<span class="more hidden">{{ sep }}{% for html in items[SHOW:] %}{{ html }}{% if not loop.last %}{{ sep }}{% endif %}{% endfor %}</span> <a href="#" class="more-toggle" data-more>+{{ items|length - SHOW }} more</a>{% endif -%}
+{%- endmacro %}
 <div class="summary-links screen-only">
   <div><b>{{ total }}</b> action{{ '' if total == 1 else 's' }}: <a href="#actions">{{ by_attribution.agent }} by an agent</a>, {{ by_attribution.human }} by a person, <a href="#unknown">{{ by_attribution.unknown }} unexplained</a>.</div>
-  {% if by_type %}<div><span class="k">By type:</span> {% for t, n in by_type %}<a href="{{ base_url }}?type={{ t }}{{ keep_agent }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions">{{ n }} {{ type_label(t)|lower }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
-  {% if by_project %}<div><span class="k">Projects:</span> {% for pr, n in by_project %}<a href="{{ base_url }}?project={{ pr|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_group }}#actions">{{ pr }} ({{ n }})</a>{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
-  {% if by_agent|length > 1 %}<div><span class="k">Agents:</span> {% for ag, n in by_agent %}<a href="{{ base_url }}?agent={{ ag|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions" title="{{ ag }}">{{ agent_display(ag).name }} ({{ n }})</a>{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
-  {% if by_user|length > 1 %}<div><span class="k">Users:</span> {% for u, n in by_user %}<a href="{{ base_url }}?user={{ u|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}#actions">{{ u }} ({{ n }})</a>{% if not loop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+  {% if by_type %}{% set items = [] %}{% for t, n in by_type %}{% set _ = items.append('<a href="%s?type=%s%s%s%s%s#actions">%d %s</a>'|format(base_url, t, keep_agent, keep_user, keep_project, keep_group, n, type_label(t)|lower)|safe) %}{% endfor %}
+  <div><span class="k">By type:</span> {{ more_list(items) }}.</div>{% endif %}
+  {% if by_project %}{% set items = [] %}{% for pr, n in by_project %}{% set _ = items.append('<a href="%s?project=%s%s%s%s%s#actions">%s (%d)</a>'|format(base_url, pr|urlencode, keep_type, keep_agent, keep_user, keep_group, pr|e, n)|safe) %}{% endfor %}
+  <div><span class="k">Projects:</span> {{ more_list(items) }}.</div>{% endif %}
+  {% if by_agent|length > 1 %}{% set items = [] %}{% for ag, n in by_agent %}{% set _ = items.append('<a href="%s?agent=%s%s%s%s%s#actions" title="%s">%s (%d)</a>'|format(base_url, ag|urlencode, keep_type, keep_user, keep_project, keep_group, ag|e, agent_display(ag).name|e, n)|safe) %}{% endfor %}
+  <div><span class="k">Agents:</span> {{ more_list(items) }}.</div>{% endif %}
+  {% if by_user|length > 1 %}{% set items = [] %}{% for u, n in by_user %}{% set _ = items.append('<a href="%s?user=%s%s%s%s%s#actions">%s (%d)</a>'|format(base_url, u|urlencode, keep_type, keep_agent, keep_project, keep_group, u|e, n)|safe) %}{% endfor %}
+  <div><span class="k">Users:</span> {{ more_list(items) }}.</div>{% endif %}
   <div><span class="k">Money:</span> {% if money %}<a href="/money/{{ start }}/{{ end }}">{% for cur, amt in money.items() %}{{ '%.2f'|format(amt) }} {{ cur }}{% if not loop.last %}, {% endif %}{% endfor %}</a>{% else %}none recorded{% endif %}.</div>
-  {% if top_files %}<div><span class="k">Most-written files:</span> <a href="{{ base_url }}?type=file_write{{ keep_agent }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions">{% for t, n in top_files %}{{ t.rsplit('/', 1)[-1] }}{% if n > 1 %} ({{ n }}x){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</a>.</div>{% endif %}
+  {% if top_files %}{% set items = [] %}{% for t, n in top_files %}{% set _ = items.append(('%s%s'|format(t.rsplit('/', 1)[-1]|e, (' (%dx)'|format(n)) if n > 1 else ''))|safe) %}{% endfor %}
+  <div><span class="k">Most-written files:</span> <a href="{{ base_url }}?type=file_write{{ keep_agent }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions" style="text-decoration:none">{{ more_list(items, '; ') }}</a>.</div>{% endif %}
   <div><span class="k">Keyboard watch:</span> <a href="#keyboard">{% if monitor_intervals %}about {{ monitor_text }}{% if single_day %} ({{ monitor_intervals[0][0] }}–{{ monitor_intervals[-1][1] }}{% if monitor_intervals|length > 1 %} with {{ monitor_intervals|length - 1 }} break{{ '' if monitor_intervals|length == 2 else 's' }}{% endif %}){% endif %}{% else %}off{% endif %}</a>{% if total %}; {{ uncovered }} of {{ total }} actions happened while it wasn't watching{% endif %}.</div>
   <div><span class="k">Needs review:</span> <a href="/alerts">{% if needs_review %}{{ needs_review }} open alert{{ '' if needs_review == 1 else 's' }}{% else %}none{% endif %}</a>.</div>
-  <div><span class="k">Not covered:</span> <a href="#coverage">{% for name, status, _ in coverage_notes if status == 'not covered' %}{{ name }}{% if not loop.last %}; {% endif %}{% endfor %}</a>.</div>
-  {% if integrity %}<div><span class="k">Log integrity:</span> <a href="#coverage">{{ integrity.splitlines()[0] }}</a></div>{% endif %}
+  {% set items = [] %}{% for name, status, _ in coverage_notes if status == 'not covered' %}{% set _ = items.append(('<a href="#coverage">%s</a>'|format(name|e))|safe) %}{% endfor %}
+  <div><span class="k">Not covered:</span> {{ more_list(items, '; ') }}.</div>
+  {% if integrity %}<div><span class="k">Log integrity:</span> <a href="#coverage">{{ integrity.splitlines()[0]|replace('Log integrity: ', '') }}</a></div>{% endif %}
 </div>
 <style>
   .summary-links { font-size: 14px; line-height: 1.7; }
   .summary-links .k { color: var(--muted); }
   .summary-links a { color: var(--text); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
   .summary-links a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  .summary-links a.more-toggle { color: var(--accent); text-decoration: none; font-size: 13px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
 </style>
+<script>
+  document.querySelectorAll(".summary-links [data-more]").forEach(function (a) {
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var hidden = a.previousElementSibling;
+      var open = hidden.classList.toggle("hidden");
+      a.textContent = open ? a.getAttribute("data-label") : "show fewer";
+    });
+    a.setAttribute("data-label", a.textContent);
+  });
+</script>
 {% if single_day %}
 <div class="note screen-only">{% if summary_saved %}Saved to summaries/{{ day }}.txt.{% else %}Not yet saved to a file — it is written automatically while the app runs.{% endif %}</div>
 {% endif %}
