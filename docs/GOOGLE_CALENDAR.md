@@ -27,7 +27,7 @@ Google requires an "OAuth client" to let any app read a calendar.
 3. **APIs & Services → Library** → search "Google Calendar API" → **Enable**.
 4. **APIs & Services → OAuth consent screen** → External → fill in an app
    name ("Agent Receipt") and your email → Save. Under **Test users**, add the
-   agent's Gmail address (e.g. `marcsagenttest@gmail.com`). While the app is
+   agent's Gmail address (e.g. `agent.mailbox@gmail.com`). While the app is
    in "Testing" only listed test users can sign in — that is fine.
 5. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
    Application type **Desktop app** → Create. Copy the **Client ID** and
@@ -36,7 +36,7 @@ Google requires an "OAuth client" to let any app read a calendar.
    ```
    RECEIPT_GOOGLE_CLIENT_ID=….apps.googleusercontent.com
    RECEIPT_GOOGLE_CLIENT_SECRET=…
-   RECEIPT_GOOGLE_AGENT_EMAILS=marcsagenttest@gmail.com
+   RECEIPT_GOOGLE_AGENT_EMAILS=agent.mailbox@gmail.com
    RECEIPT_GOOGLE_CALENDARS=primary
    ```
 7. Sign the agent's account in, one time:
