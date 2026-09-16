@@ -1,6 +1,6 @@
 """Build a demo receipt for screenshots and the commercial, and serve it on its own port.
 
-    .venv/bin/python examples/demo_data.py          # builds demo_receipt.db and serves http://127.0.0.1:8766/
+    .venv/bin/python examples/demo_data.py          # builds demo_receipt.db and serves http://127.0.0.1:8767/
 
 Everything in it is invented: a small plumbing business, "Harbor Plumbing", with a
 bookkeeping agent that has its own mailbox and Ramp card, a coding agent working on
@@ -26,7 +26,7 @@ from ramp_connector import _record as ramp_record  # noqa: E402
 from store import connect  # noqa: E402
 
 DB = ROOT / "demo_receipt.db"
-PORT = 8766
+PORT = 8767
 SITE = "/Users/you/Projects/harbor-website"
 BOOKS = "/Users/you/Projects/harbor-books"
 MAILBOX = "mailbox books@harborplumbing.com"
