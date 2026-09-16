@@ -175,7 +175,7 @@
 <div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
 {% macro action_table(rows, show_project) %}
 <table class="sheet">
-  <colgroup><col style="width:76px"><col style="width:210px"><col>{% if show_project %}<col style="width:130px">{% endif %}<col style="width:120px"><col style="width:90px"></colgroup>
+  <colgroup><col style="width:{{ '76px' if single_day else '132px' }}"><col style="width:210px"><col>{% if show_project %}<col style="width:130px">{% endif %}<col style="width:120px"><col style="width:90px"></colgroup>
   <tr><th>Time</th><th>Who did it</th><th>What happened</th>{% if show_project %}<th>Project</th>{% endif %}<th>Category</th><th>Undoable?</th></tr>
   {% for a in rows %}
   {% set d = agent_display(a.agent) %}
@@ -265,7 +265,7 @@
 <div class="note">Actions where neither an agent's log nor keyboard activity says who did it.</div>
 <div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
 <table class="sheet">
-  <colgroup><col style="width:76px"><col><col style="width:38%"></colgroup>
+  <colgroup><col style="width:{{ '76px' if single_day else '132px' }}"><col><col style="width:38%"></colgroup>
   <tr><th>Time</th><th>What happened</th><th>Why unexplained</th></tr>
   {% for a in unknown %}
   <tr data-type="{{ a.action_type }}" class="row" data-row title="Click for details">
