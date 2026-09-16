@@ -700,9 +700,15 @@ def _rules_changed(conn: sqlite3.Connection) -> bool:
 
 def _reset_if_rules_changed(conn: sqlite3.Connection, full: bool) -> None:
     if full or _rules_changed(conn):
-        conn.execute("DELETE FROM alerts WHERE action_id IN (SELECT id FROM actions WHERE source = 'log')")
+        # Only rows re-creatable from a transcript are dropped. Rows attributed by credential
+        # (the agent's own Google account, its Ramp fund, its GitHub account) are also
+        # source='log' but have no transcript behind them: deleting them would lose them.
+        names = tuple(s.name for s in SOURCES)
+        marks = ",".join("?" * len(names))
+        where = f"source = 'log' AND COALESCE(json_extract(raw_json, '$.source'), 'claude-code') IN ({marks})"
+        conn.execute(f"DELETE FROM alerts WHERE action_id IN (SELECT id FROM actions WHERE {where})", names)
         conn.execute("DELETE FROM meta WHERE key = 'alerts_evaluated_to'")
-        conn.execute("DELETE FROM actions WHERE source = 'log'")
+        conn.execute(f"DELETE FROM actions WHERE {where}", names)
         conn.execute("DELETE FROM parser_state")
         conn.execute("DELETE FROM transcript_chunks")
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('rules_version', ?)",

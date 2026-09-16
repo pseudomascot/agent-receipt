@@ -517,3 +517,20 @@ def test_cursor_unsanitize_respects_existing_hyphenated_folders(tmp_path, monkey
     monkeypatch.setattr(log_parser.Path, "exists", lambda self: str(self).startswith(str(tmp_path)) and (tmp_path / str(self).lstrip("/")).exists() or self == Path("/"))
     # Simpler: call the helper against a fake root by patching Path("/") lookups is awkward; test the plain fallback instead.
     assert log_parser._cursor_unsanitize("Users-marc-Desktop-cursor-test").startswith("/Users/marc")
+
+
+def test_rules_reset_keeps_credential_rows(tmp_path):
+    path = _sample_transcript(tmp_path)
+    conn = connect(tmp_path / "t.db")
+    assert ingest(conn, [path]) == 3
+    conn.execute("INSERT INTO actions (timestamp, agent, source, action_type, target, attribution, confidence_note, raw_json, source_ref) "
+                 "VALUES (1, 'google calendar (bot@x)', 'log', 'create_event', 'Site visit', 'agent', 'by credential', "
+                 "'{\"source\": \"google_calendar\"}', 'gcal:1')")
+    conn.execute("INSERT INTO actions (timestamp, agent, source, action_type, target, attribution, confidence_note, raw_json, source_ref) "
+                 "VALUES (2, 'mailbox bot', 'log', 'purchase', 'ACME', 'agent', 'by credential', '{\"source\": \"ramp\"}', 'ramp:1')")
+    conn.execute("UPDATE meta SET value = 'older' WHERE key = 'rules_version'")
+    conn.commit()
+    assert ingest(conn, [path]) == 3                                           # transcript rows re-extracted
+    kept = {r[0] for r in conn.execute("SELECT source_ref FROM actions")}
+    assert {"gcal:1", "ramp:1"} <= kept and len(kept) == 5                       # credential rows untouched
+    conn.close()
