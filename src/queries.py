@@ -202,7 +202,7 @@ def day_statement(conn: sqlite3.Connection, day: date, type_filter: str | None =
 
 def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
               type_filter: str | None = None, agent_filter: str | None = None,
-              user_filter: str | None = None):
+              user_filter: str | None = None, project_filter: str | None = None):
     """Everything the statement page and summary need for start_day..end_day inclusive."""
     if end_day < start_day:
         start_day, end_day = end_day, start_day
@@ -273,7 +273,8 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
     shown = [a for a in actions
              if (not type_filter or a["action_type"] == type_filter)
              and (not agent_filter or a["agent"] == agent_filter)
-             and (not user_filter or a["user"] == user_filter)]
+             and (not user_filter or a["user"] == user_filter)
+             and (not project_filter or a["project"] == project_filter)]
     # Newest first, like a bank statement: rows within a project, and projects by
     # their latest action. (Exports stay chronological.)
     groups = {}
@@ -304,6 +305,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "type_filter": type_filter,
         "agent_filter": agent_filter,
         "user_filter": user_filter,
+        "project_filter": project_filter,
         "by_agent": sorted(by_agent.items(), key=lambda kv: -kv[1]),
         "by_user": sorted(by_user.items(), key=lambda kv: -kv[1]),
         "by_day": sorted(by_day.items(), reverse=True),

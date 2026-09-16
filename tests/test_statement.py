@@ -247,3 +247,20 @@ def test_subagent_rows_are_tagged(tmp_path):
     assert html.count("· sub-agent · ") == 1                                    # kind lives in the tooltip, once
     assert html.count('· local agent">') >= 3 and 'title="claude-code · local agent">Claude Code</span>' in html
     assert html.count("Who did it</th>") == 1 and ">Who</th>" not in html          # one flat table, no second Who column
+
+
+def test_summary_is_linked_and_project_filter_works(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    client = create_app(db).test_client()
+    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert 'href="/day/2026-09-14?project=proj-a#actions">proj-a (2)</a>' in html          # summary project link
+    assert 'href="/day/2026-09-14?type=execute#actions">2 commands run</a>' in html         # summary type link
+    assert 'href="/money/2026-09-14/2026-09-14">' not in html and "none recorded" in html  # no money that day
+    assert 'href="/alerts">none</a>' in html and 'href="#coverage">' in html
+    assert '<pre class="summary print-only">' in html                                       # plain text kept for print
+    html = client.get(f"/day/{DAY}?project=proj-a").get_data(as_text=True)
+    assert "src/&lt;script&gt;" in html and "git commit -m hi" not in html
+    assert "Filtered:" in html and "project: proj-a" in html and "2 of 4 actions" in html
+    assert 'href="/day/2026-09-14?type=execute&project=proj-a#actions"' in html            # type link keeps the project
+    assert "/export.csv?start=2026-09-14&end=2026-09-14&project=proj-a" in html

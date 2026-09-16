@@ -39,6 +39,7 @@ def _filters() -> dict:
         "type": type_filter if type_filter in ACTION_TYPES else None,
         "agent": request.args.get("agent") or None,
         "user": request.args.get("user") or None,
+        "project": request.args.get("project") or None,
     }
 
 
@@ -70,7 +71,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         filters = _filters()
         conn = db()
         try:
-            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"], filters["project"])
             integrity = status_line(conn)
             alerted = unseen_action_ids(conn, day_bounds(start)[0], day_bounds(end)[1])
             open_alerts = unseen_count(conn)
@@ -140,7 +141,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         try:
             if start is None:
                 start = earliest_day(conn) or end
-            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"], filters["project"])
             integrity = status_line(conn)
         finally:
             conn.close()
@@ -167,7 +168,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         filters = _filters()
         conn = db()
         try:
-            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"], filters["project"])
         finally:
             conn.close()
         money = money_summary(data)
@@ -354,7 +355,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         filters = _filters()
         conn = db()
         try:
-            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"])
+            data = statement(conn, start, end, filters["type"], filters["agent"], filters["user"], filters["project"])
             text = export_csv(conn, data, filters)
         finally:
             conn.close()
