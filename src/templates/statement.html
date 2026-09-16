@@ -71,7 +71,13 @@
   .summary-links a { color: var(--text); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
   .summary-links a:hover { color: var(--accent); text-decoration-color: var(--accent); }
   .summary-links a.more-toggle { color: var(--accent); text-decoration: none; font-size: 13px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+  select.pick { padding: 5px 30px 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text); font: inherit; font-size: 13px; max-width: 420px; }
 </style>
+<script>
+  document.querySelectorAll("select[data-pick]").forEach(function (sel) {
+    sel.addEventListener("change", function () { if (sel.value) window.location.href = sel.value; });
+  });
+</script>
 <script>
   document.querySelectorAll(".summary-links [data-more]").forEach(function (a) {
     a.addEventListener("click", function (ev) {
@@ -119,24 +125,46 @@
   {% for type, n in by_type %}
   <button type="button" class="chip check" data-toggle-type="{{ type }}">{{ type_label(type) }} ({{ n }})</button>
   {% endfor %}
-  {% if by_project|length > 1 or project_filter %}<span class="note" style="margin-left:8px">Projects: <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_group }}#actions"{% if not project_filter %} style="font-weight:600"{% endif %}>all</a>{% for pr, n in by_project %}, <a href="{{ base_url }}?project={{ pr|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_group }}#actions"{% if project_filter == pr %} style="font-weight:600"{% endif %}>{{ pr }} ({{ n }})</a>{% endfor %}</span>{% endif %}
 </div>
+{% if by_project|length > 1 or project_filter %}
+<div class="filters screen-only">
+  <span class="label">Project</span>
+  <select class="pick" data-pick>
+    <option value="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_group }}{{ keep_q }}#actions"{% if not project_filter %} selected{% endif %}>all ({{ total }})</option>
+    {% for pr, n in by_project %}<option value="{{ base_url }}?project={{ pr|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_group }}{{ keep_q }}#actions"{% if project_filter == pr %} selected{% endif %}>{{ pr }} ({{ n }})</option>{% endfor %}
+  </select>
+</div>
+{% endif %}
 {% if by_agent|length > 1 %}
 <div class="filters screen-only">
   <span class="label">Agent</span>
+  {% if by_agent|length <= 6 %}
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
   <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
   {% endfor %}
+  {% else %}
+  <select class="pick" data-pick>
+    <option value="{{ base_url }}?{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions"{% if not agent_filter %} selected{% endif %}>all</option>
+    {% for agent, n in by_agent %}<option value="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions"{% if agent_filter == agent %} selected{% endif %}>{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</option>{% endfor %}
+  </select>
+  {% endif %}
 </div>
 {% endif %}
 {% if by_user|length > 1 %}
 <div class="filters screen-only">
   <span class="label">User</span>
+  {% if by_user|length <= 6 %}
   <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
   <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
+  {% else %}
+  <select class="pick" data-pick>
+    <option value="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions"{% if not user_filter %} selected{% endif %}>all</option>
+    {% for user, n in by_user %}<option value="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions"{% if user_filter == user %} selected{% endif %}>{{ user }} ({{ n }})</option>{% endfor %}
+  </select>
+  {% endif %}
 </div>
 {% endif %}
 {% if type_filter or agent_filter or user_filter or project_filter or search %}

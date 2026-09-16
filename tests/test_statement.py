@@ -55,6 +55,8 @@ def test_agent_and_user_filters_appear_only_with_variety(tmp_path):
     client = create_app(db2).test_client()
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
     assert "?agent=other-bot" in html and "?user=sam" in html
+    assert 'class="chip">other-bot' in html or ">other-bot (1)</a>" in html                 # few agents: chips
+    assert 'name="q"' in html and "<select" in html and 'proj-a (2)</option>' in html        # projects: a dropdown
     assert "deploy.sh" in html and "git commit -m hi" in html
 
     html = client.get(f"/day/{DAY}?agent=other-bot").get_data(as_text=True)
@@ -292,3 +294,16 @@ def test_keyword_search(tmp_path):
     html = client.get(f"/day/{DAY}?q=commit&type=execute").get_data(as_text=True)
     assert 'name="type" value="execute"' in html and 'name="q" value="commit"' in html         # search keeps the type filter, and vice versa
     assert "1 of 4 actions" in html
+
+
+def test_many_agents_become_a_dropdown(tmp_path):
+    db = tmp_path / "t.db"
+    conn = connect(db)
+    for i in range(8):
+        conn.execute("INSERT INTO actions (timestamp, agent, user, source, action_type, target, attribution, confidence_note, raw_json) "
+                     "VALUES (?, ?, 'marc', 'log', 'file_write', 'f', 'agent', 'agent log', ?)", (T + i, f"bot-{i}", _raw("/Users/marc/p")))
+    conn.commit(); conn.close()
+    html = create_app(db).test_client().get(f"/day/{DAY}?type=file_write").get_data(as_text=True)
+    assert html.count("<select class=\"pick\"") == 1                                        # agents (8) → dropdown; one project → no project picker
+    assert '?agent=bot-3&type=file_write#actions" >bot-3 (1)</option>' in html or 'bot-3 (1)</option>' in html
+    assert 'class="chip on">all</a>' not in html
