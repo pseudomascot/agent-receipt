@@ -170,6 +170,8 @@ def save(section_id: str, form: dict, user: str, conn: sqlite3.Connection | None
         if form.get(f"clear_{key}"):
             updates[key] = None
             continue
+        if key not in form:
+            continue                                    # not on this form: leave it alone
         value = form.get(key)
         value = value[-1] if isinstance(value, (list, tuple)) else value
         value = " ".join(str(value or "").split())
@@ -262,9 +264,12 @@ def test_google(env: dict) -> tuple[bool, str]:
         return False, "credentials saved; not signed in yet — press “Sign in as the agent”"
     try:
         bearer = access_token(s, token)
-        items = api_get(bearer, "/users/me/calendarList", {"maxResults": 10}).get("items") or []
-        names = ", ".join(i.get("summary", "?") for i in items[:5])
-        return True, f"signed in: {len(items)} calendar(s) visible ({names})"
+        # Stay inside the read-only *events* scope the receipt asks for: list a few events per watched calendar.
+        counts = []
+        for cal in s["calendars"]:
+            items = api_get(bearer, f"/calendars/{cal}/events", {"maxResults": 5, "singleEvents": "true"}).get("items") or []
+            counts.append(f"{cal}: {len(items)} recent event(s)")
+        return True, "signed in as the agent; can read " + "; ".join(counts)
     except GoogleError as exc:
         return False, f"Google refused: {exc}"
     except OSError as exc:

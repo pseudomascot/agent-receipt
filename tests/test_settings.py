@@ -52,6 +52,7 @@ def test_save_records_field_names_never_values(tmp_path):
     assert sp.save("mailbox", {"RECEIPT_IMAP_USER": ["bot@x.com"], "RECEIPT_IMAP_HOST": ["imap.gmail.com"], "clear_RECEIPT_IMAP_PASSWORD": ["1"]}, "marc", conn, env) == ["RECEIPT_IMAP_PASSWORD"]
     assert "RECEIPT_IMAP_PASSWORD" not in load_env(env)
     assert sp.save("calendar", {"RECEIPT_CALENDAR": ["on"]}, "marc", conn, env) == ["RECEIPT_CALENDAR"] and load_env(env)["RECEIPT_CALENDAR"] == "on"
+    assert sp.save("mailbox", {}, "marc", conn, env) == [] and load_env(env)["RECEIPT_IMAP_USER"] == "bot@x.com"   # partial form touches nothing
     assert sp.save("nope", {}, "marc", conn, env) == []
     conn.close()
 

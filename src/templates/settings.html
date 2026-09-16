@@ -26,8 +26,8 @@
   <label class="field">
     <span class="field-label">{{ f.label }}</span>
     {% if f.kind == 'secret' %}
-      <input type="password" name="{{ f.key }}" autocomplete="off" placeholder="{{ '•••••••• saved — leave blank to keep' if f.saved else 'paste here' }}">
-      {% if f.saved %}<span class="note"><input type="checkbox" name="clear_{{ f.key }}" value="1"> remove</span>{% endif %}
+      <span style="display:flex; gap:10px; align-items:center"><input type="password" name="{{ f.key }}" autocomplete="off" placeholder="{{ '•••••••• saved — leave blank to keep' if f.saved else 'paste here' }}">
+      {% if f.saved %}<label class="note" style="white-space:nowrap"><input type="checkbox" name="clear_{{ f.key }}" value="1"> remove</label>{% endif %}</span>
     {% elif f.kind.startswith('select:') %}
       <select name="{{ f.key }}">{% for opt in f.kind[7:].split(',') %}<option value="{{ opt }}"{% if (f.value or f.placeholder) == opt %} selected{% endif %}>{{ opt }}</option>{% endfor %}</select>
     {% elif f.kind == 'toggle' %}
