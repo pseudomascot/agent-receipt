@@ -107,6 +107,40 @@ Filled in during session 1 (2026-09-14), on Marc's Mac.
   sometimes bare path strings instead of objects (treated as an edit of that
   path).
 
+## Cursor — added 2026-09-16
+- Verified by installing Cursor (its agent-first window, model "Cursor Grok 4.6")
+  and running one task in a throwaway folder: create `hello.txt`, run `ls`.
+- Log location: `~/.cursor/projects/<sanitized-folder>/agent-transcripts/<conversation-id>/<conversation-id>.jsonl`
+  — one JSONL file per conversation. `<sanitized-folder>` is the working
+  directory with `/` replaced by `-` (`Users-marc-Desktop-cursor-test`); the
+  parser rebuilds the real path by checking the disk for the longest existing
+  prefix, so hyphenated folder names survive. `empty-window` means no folder.
+- Line shapes: `{"role":"user","message":{"content":[{"type":"text","text":"<timestamp>Wednesday, Sep 16, 2026, 8:21 AM (UTC-4)</timestamp>\n<user_query>…</user_query>"}]}}`,
+  `{"role":"assistant","message":{"content":[{"type":"text",…},{"type":"tool_use","name":"Write","input":{"path":…,"contents":…}},{"type":"tool_use","name":"Shell","input":{"command":"ls","description":…}}]}}`,
+  `{"type":"turn_ended","status":"success"}`. **No per-line timestamp, no tool-call ids, no cwd**: the
+  parser dates every tool call in a turn from the user line's `<timestamp>` tag
+  (minute precision — said so in each row's note) and falls back to the file's
+  modification time; the call id is the file position.
+- Tool mapping: `Write`/`Edit`/`StrReplace`/… → file_write (path made absolute
+  against the folder); `Shell`/`Bash`/`RunTerminalCommand` → execute (same
+  read-only filter as Claude Code, so `ls` is not a row); `Delete` → file
+  deletion; `Read`/`Grep`/`Glob`/`Search`/… skipped; any other tool → `other`
+  as `cursor:<name>` so nothing is silently dropped.
+- Model and title come from Cursor's state database, read read-only:
+  `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`, table
+  `cursorDiskKV`, key `composerData:<conversation-id>` → `modelConfig.modelName`,
+  `name`. The agent label is `cursor (<model>)` — so **Grok, Claude or GPT inside
+  Cursor** all appear as Cursor with the model named; the receipt tracks the
+  harness, not the model. If the db is unreadable the label is plain `cursor`.
+- Richer but unused: the same db holds one `bubbleId:<conv>:<id>` row per step
+  with exact `createdAt` and `toolFormerData` (`edit_file_v2`,
+  `run_terminal_command_v2`, params, status); and
+  `~/.cursor/ai-tracking/ai-code-tracking.db` records every AI-written file with
+  a millisecond timestamp, model and conversation id. Either could refine the
+  minute-precision times later.
+- Cursor's classic IDE mode keeps chats in `workspaceStorage/<hash>/state.vscdb`
+  instead; not covered until seen.
+
 ## Inbox — receipt lines any agent writes itself (added 2026-09-14)
 - `~/.agent-receipt/inbox/*.jsonl`, format in docs/RECEIPT_LINE.md, helpers in
   `examples/`. The agent declares the action type, target, amount, id,

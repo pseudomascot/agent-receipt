@@ -39,7 +39,7 @@ def describe(action_type: str, target, tool: str = "", cwd=None, extra: dict | N
 
 def _describe_file(tool, path, cwd, extra):
     name = _relative(path, cwd)
-    if tool == "codex:file_delete" or extra.get("deleted"):
+    if tool in ("codex:file_delete", "cursor:delete") or extra.get("deleted"):
         return f"Deleted {name}"
     if tool == "Write":
         return f"Wrote the file {name}"
@@ -54,6 +54,8 @@ def _describe_other(tool, target, extra):
     short = tool.split("__", 2)[-1] if tool.startswith("mcp__") else tool
     if tool.startswith("agent-receipt:"):                                  # the app's own buttons
         return _short(target)
+    if tool.startswith("cursor:"):
+        return f"Cursor tool {tool[len('cursor:'):]}: {_short(target)}" if target else f"Cursor tool {tool[len('cursor:'):]}"
     if tool == "Agent":
         return f"Started a sub-agent: {_short(target)}" if target else "Started a sub-agent"
     if tool == "calendar:changed":

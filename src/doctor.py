@@ -19,6 +19,7 @@ SOURCE_LABELS = {
     "claude-code": "Claude Code",
     "cowork": "Cowork (Claude Desktop local agent mode)",
     "codex": "Codex (OpenAI)",
+    "cursor": "Cursor (agent conversations)",
     "inbox": "Receipt-line inbox (other agents)",
 }
 

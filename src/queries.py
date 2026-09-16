@@ -16,6 +16,8 @@ STATIC_COVERAGE = [
      "Read from Cowork's audit transcripts. Actions inside its sandbox and via Claude in Chrome are listed."),
     ("Codex (OpenAI's coding agent, app and CLI)", "covered",
      "Read from Codex's session rollouts: commands run, files added/changed/deleted, MCP tools, generated files."),
+    ("Cursor (its agent, whichever model — Grok, Claude, GPT — is selected)", "covered",
+     "Read from Cursor's agent transcripts: files written or deleted, commands run, other tools. Times come from Cursor's turn stamps (minute precision)."),
     ("Any other agent that writes receipt lines", "covered",
      "One JSON line per side effect appended to ~/.agent-receipt/inbox/ (see docs/RECEIPT_LINE.md)."),
     ("Google Antigravity", "not covered",

@@ -32,7 +32,7 @@ from store import DB_PATH, connect
 
 # Bumping this deletes every log-sourced row and re-extracts all transcripts.
 # Do it whenever what we extract, or how we judge it, changes.
-RULES_VERSION = "9"
+RULES_VERSION = "10"
 
 ACTION_TYPES = {"send_email", "create_event", "purchase", "file_write", "post", "execute", "other"}
 FILE_WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
@@ -274,6 +274,117 @@ def _inbox_calls(entry: dict, _meta: dict) -> list:
     return [Call(f"declared:{action}", detail, str(call_id), entry.get("session"), entry.get("cwd"), overrides)]
 
 
+CURSOR_ROOT = Path.home() / ".cursor" / "projects"
+CURSOR_STATE_DB = Path.home() / "Library" / "Application Support" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+CURSOR_WRITE_TOOLS = {"Write": "Write", "Edit": "Edit", "StrReplace": "Edit", "MultiEdit": "Edit", "CreateFile": "Write",
+                      "EditFile": "Edit", "edit_file_v2": "Edit", "write_file": "Write", "search_replace": "Edit"}
+CURSOR_SHELL_TOOLS = {"Shell", "Bash", "RunTerminalCommand", "run_terminal_command_v2", "run_terminal_cmd"}
+CURSOR_DELETE_TOOLS = {"Delete", "DeleteFile", "delete_file"}
+CURSOR_READ_TOOLS = {"Read", "ReadFile", "read_file", "Grep", "grep", "Glob", "glob", "LS", "ls", "ListDir", "list_dir",
+                     "Search", "SemanticSearch", "codebase_search", "WebSearch", "web_search", "Fetch", "Todo", "TodoWrite",
+                     "todo_write", "Plan", "Think", "Task", "ReadLints", "read_lints", "Diagnostics"}
+CURSOR_STAMP = re.compile(r"<timestamp>[^<]*?([A-Z][a-z]{2}) (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}) (AM|PM) \(UTC([+-]\d{1,2})(?::?(\d{2}))?\)")
+MONTHS = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def _cursor_unsanitize(name: str) -> str:
+    """`Users-marc-Desktop-cursor-test` -> `/Users/marc/Desktop/cursor-test`, checking the disk so
+    hyphens inside a folder name survive (longest existing prefix wins)."""
+    tokens = name.split("-")
+    path, i = Path("/"), 0
+    while i < len(tokens):
+        for j in range(len(tokens), i, -1):
+            cand = path / "-".join(tokens[i:j])
+            if cand.exists():
+                path, i = cand, j
+                break
+        else:
+            path, i = path / tokens[i], i + 1
+    return str(path)
+
+
+def _cursor_meta(path: Path) -> dict:
+    """Per-transcript facts: the folder it ran in, and (from Cursor's state db) the model and title."""
+    meta = {"conversation_id": path.stem, "cwd": None, "model": None, "title": None, "mtime": None}
+    try:
+        project_dir = path.parent.parent.parent.name          # <project>/agent-transcripts/<id>/<id>.jsonl
+        if project_dir and project_dir != "empty-window":
+            meta["cwd"] = _cursor_unsanitize(project_dir)
+        meta["mtime"] = datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
+    except OSError:
+        pass
+    db = CURSOR_STATE_DB
+    if db.exists():
+        try:
+            conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+            try:
+                row = conn.execute("SELECT value FROM cursorDiskKV WHERE key = ?", (f"composerData:{path.stem}",)).fetchone()
+            finally:
+                conn.close()
+            if row:
+                data = json.loads(row[0])
+                meta["title"] = data.get("name")
+                meta["model"] = ((data.get("modelConfig") or {}).get("modelName")) or None
+        except (sqlite3.Error, ValueError, OSError):
+            pass
+    return meta
+
+
+def _cursor_stamp(text: str):
+    m = CURSOR_STAMP.search(text or "")
+    if not m:
+        return None
+    mon, day, year, hour, minute, ampm, off_h, off_m = m.groups()
+    hour = int(hour) % 12 + (12 if ampm == "PM" else 0)
+    sign = "-" if off_h.startswith("-") else "+"
+    return f"{int(year):04d}-{MONTHS[mon]:02d}-{int(day):02d}T{hour:02d}:{int(minute):02d}:00{sign}{abs(int(off_h)):02d}:{int(off_m or 0):02d}"
+
+
+def _cursor_calls(entry: dict, meta: dict) -> list:
+    """Cursor agent transcripts: {"role": ..., "message": {"content": [blocks]}}; user turns carry a
+    <timestamp> tag that dates the assistant's tool calls that follow (minute precision)."""
+    message = entry.get("message") or {}
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    if entry.get("role") == "user":
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                stamp = _cursor_stamp(block.get("text"))
+                if stamp:
+                    meta["_ts"] = stamp
+        return []
+    if entry.get("role") != "assistant":
+        return []
+    entry["_ts"] = meta.get("_ts") or meta.get("mtime")
+    calls = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            continue
+        name = str(block.get("name") or "")
+        inp = block.get("input") if isinstance(block.get("input"), dict) else {}
+        path = inp.get("path") or inp.get("file_path") or inp.get("relativeWorkspacePath") or inp.get("target_file")
+        if path and not str(path).startswith("/") and meta.get("cwd"):
+            path = str(Path(meta["cwd"]) / str(path))
+        if name in CURSOR_WRITE_TOOLS:
+            calls.append(Call(CURSOR_WRITE_TOOLS[name], {"file_path": path, **{k: v for k, v in inp.items() if k != "contents"}},
+                              block.get("id"), meta.get("conversation_id"), meta.get("cwd")))
+        elif name in CURSOR_DELETE_TOOLS:
+            calls.append(Call("cursor:delete", {"file_path": path}, block.get("id"), meta.get("conversation_id"), meta.get("cwd")))
+        elif name in CURSOR_SHELL_TOOLS:
+            calls.append(Call("Bash", {"command": inp.get("command"), "description": inp.get("description")},
+                              block.get("id"), meta.get("conversation_id"), meta.get("cwd")))
+        elif name in CURSOR_READ_TOOLS or not name:
+            continue
+        else:
+            calls.append(Call(f"cursor:{name}", inp, block.get("id"), meta.get("conversation_id"), meta.get("cwd")))
+    return calls
+
+
+def _cursor_agent(_entry: dict, meta: dict) -> str:
+    return f"cursor ({meta['model']})" if meta.get("model") else "cursor"
+
+
 CLAUDE_CODE = Source(
     name="claude-code",
     root=Path.home() / ".claude" / "projects",
@@ -304,6 +415,16 @@ CODEX = Source(
     session_meta=_codex_meta,
     line_hint='"item_completed"',
 )
+CURSOR = Source(
+    name="cursor",
+    root=CURSOR_ROOT,
+    pattern="agent-transcripts/*/*.jsonl",
+    extract=_cursor_calls,
+    agent_name=_cursor_agent,
+    timestamp=lambda e: e.get("_ts"),
+    session_meta=_cursor_meta,
+    line_hint='"message"',
+)
 INBOX = Source(
     name="inbox",
     root=Path.home() / ".agent-receipt" / "inbox",
@@ -313,7 +434,7 @@ INBOX = Source(
     timestamp=lambda e: e.get("ts") or e.get("timestamp"),
     session_meta=lambda _p: {},
 )
-SOURCES = (CLAUDE_CODE, COWORK, CODEX, INBOX)
+SOURCES = (CLAUDE_CODE, COWORK, CODEX, CURSOR, INBOX)
 
 
 def current_user() -> str:
@@ -330,9 +451,14 @@ def classify(name: str, tool_input: dict):
     if name.startswith("declared:"):
         action = name.split(":", 1)[1]
         return (action if action in ACTION_TYPES else "other"), None, None
-    if name in FILE_WRITE_TOOLS or name == "codex:file_delete":
+    if name in FILE_WRITE_TOOLS or name in ("codex:file_delete", "cursor:delete"):
         path = tool_input.get("file_path") or tool_input.get("notebook_path")
         return "file_write", path, (f"file://{path}" if path else None)
+    if name.startswith("cursor:"):
+        # Any other Cursor tool that is not a read: recorded as "other" so nothing is silently missed.
+        target = next((str(v) for k in ("description", "url", "query", "text", "message", "path", "command")
+                       for v in [tool_input.get(k)] if v), None)
+        return "other", _clip(target), None
     if name in EXECUTE_TOOLS or (name.startswith("mcp__") and name.split("__", 2)[-1] in MCP_SHELL_TOOLS):
         command = _command_text(tool_input.get("command"))
         if is_read_only(command):
@@ -423,7 +549,7 @@ def _base_note(source_name: str, session_id, reason, declared=False) -> str:
     if declared:
         note = f"declared by the agent itself via the receipt inbox, session {session_id}"
     else:
-        where = "Claude Code transcript" if source_name == "claude-code" else f"{source_name} transcript"
+        where = {"claude-code": "Claude Code transcript", "cursor": "Cursor transcript (time from the turn's stamp, minute precision)"}.get(source_name, f"{source_name} transcript")
         note = f"declared in {where}, session {session_id}"
     return f"{note}; reversibility: {reason}" if reason else note
 

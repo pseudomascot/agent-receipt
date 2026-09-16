@@ -78,8 +78,9 @@ stay inside this folder; `make_app.command` rebuilds it.
 - `input_events`: that a key or click happened, and when. Never which key,
   never where. Only while the `.command` window is open.
 - `actions`: every side-effect tool call found in the agents' own transcripts
-  — Claude Code, Claude Desktop's Cowork (including scheduled tasks), and
-  OpenAI's Codex: file writes, shell commands, browser actions, posts.
+  — Claude Code, Claude Desktop's Cowork (including scheduled tasks), OpenAI's
+  Codex, and Cursor's agent (whichever model it runs — Grok, Claude, GPT):
+  file writes, shell commands, browser actions, posts.
   Any other agent joins by appending one JSON line per side effect to
   `~/.agent-receipt/inbox/` — see `docs/RECEIPT_LINE.md` and `examples/`.
   The model provider (OpenAI, Anthropic, Google, OpenRouter…) is irrelevant;

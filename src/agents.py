@@ -19,7 +19,7 @@ from datetime import datetime
 from config import calendar_settings, email_settings, google_calendar_settings, load_env, ramp_settings, stripe_settings
 
 RECEIPT_AGENT = "agent receipt"          # rows the app writes about its own buttons
-LOCAL_HARNESSES = {"claude-code": "Claude Code", "cowork": "Cowork", "codex": "Codex"}
+LOCAL_HARNESSES = {"claude-code": "Claude Code", "cowork": "Cowork", "codex": "Codex", "cursor": "Cursor"}
 
 INSERT = """
 INSERT INTO actions
@@ -130,6 +130,8 @@ def _plain(name: str, kind: str, what: str, known: dict) -> tuple[str, str]:
         return "Cowork", "in the Claude app"
     if head == "codex":
         return "Codex (OpenAI)", paren
+    if head == "cursor":
+        return "Cursor", (f"model {paren}" if paren else "")
     return name, what
 
 

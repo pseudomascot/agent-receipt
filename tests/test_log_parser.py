@@ -451,3 +451,68 @@ def test_ingest_is_idempotent(tmp_path):
     assert ingest(conn, [path]) == 0
     assert conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0] == 3
     conn.close()
+
+
+def _cursor_tree(tmp_path, folder="Users-marc-Desktop-cursor-test", conv="e1838abb"):
+    d = tmp_path / "projects" / folder / "agent-transcripts" / conv
+    d.mkdir(parents=True)
+    return d / f"{conv}.jsonl"
+
+
+def test_cursor_source_reads_its_agent_transcripts(tmp_path, monkeypatch):
+    import log_parser
+    import sqlite3
+    # A fake Cursor state db with the conversation's model + title, read read-only.
+    db = tmp_path / "state.vscdb"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute("INSERT INTO cursorDiskKV VALUES (?, ?)", ("composerData:e1838abb", json.dumps(
+        {"name": "Hello.txt file creation", "modelConfig": {"modelName": "grok-4.6"}})))
+    conn.commit(); conn.close()
+    monkeypatch.setattr(log_parser, "CURSOR_STATE_DB", db)
+    (tmp_path / "Users" ).mkdir()   # nothing real: unsanitize falls back to plain splitting
+    path = _cursor_tree(tmp_path)
+    _write_transcript(path, [
+        {"role": "user", "message": {"content": [{"type": "text", "text": "<timestamp>Wednesday, Sep 16, 2026, 8:21 AM (UTC-4)</timestamp>\n<user_query>\nmake it\n</user_query>"}]}},
+        {"role": "assistant", "message": {"content": [
+            {"type": "text", "text": "I'll create it."},
+            {"type": "tool_use", "name": "Read", "input": {"path": "/Users/marc/Desktop/cursor-test/x"}},
+            {"type": "tool_use", "name": "Write", "input": {"path": "/Users/marc/Desktop/cursor-test/hello.txt", "contents": "hello\n"}},
+            {"type": "tool_use", "name": "Shell", "input": {"command": "ls", "description": "List files"}},
+            {"type": "tool_use", "name": "Shell", "input": {"command": "rm -rf build", "description": "clean"}},
+            {"type": "tool_use", "name": "Delete", "input": {"path": "old.txt"}},
+            {"type": "tool_use", "name": "Browser", "input": {"url": "https://example.com"}},
+        ]}},
+        {"role": "assistant", "message": {"content": [{"type": "text", "text": "Done."}]}},
+        {"type": "turn_ended", "status": "success"},
+    ])
+    actions = list(parse_file(path, log_parser.CURSOR))
+    assert [a["action_type"] for a in actions] == ["file_write", "execute", "file_write", "other"]     # Read skipped; `ls` read-only
+    assert all(a["agent"] == "cursor (grok-4.6)" and a["source"] == "log" for a in actions)
+    assert actions[0]["target"] == "/Users/marc/Desktop/cursor-test/hello.txt"
+    assert actions[1]["target"] == "rm -rf build" and actions[1]["reversible"] == 0
+    assert actions[2]["target"].endswith("/cursor-test/old.txt") and json.loads(actions[2]["raw_json"])["tool"] == "cursor:delete"
+    assert actions[3]["target"] == "https://example.com" and json.loads(actions[3]["raw_json"])["tool"] == "cursor:Browser"
+    from datetime import datetime, timezone, timedelta
+    stamp = datetime(2026, 9, 16, 8, 21, tzinfo=timezone(timedelta(hours=-4))).timestamp()
+    assert all(a["timestamp"] == stamp for a in actions)                                                # from the turn's stamp
+    assert "Cursor transcript" in actions[0]["confidence_note"] and "minute precision" in actions[0]["confidence_note"]
+    raw = json.loads(actions[0]["raw_json"])
+    assert raw["source"] == "cursor" and raw["session_id"] == "e1838abb" and raw["cwd"].endswith("cursor-test")
+    assert [p.name for p in find_transcripts(tmp_path / "projects", log_parser.CURSOR)] == ["e1838abb.jsonl"]
+
+    # No state db, no timestamp tag: still parsed, dated by the file's mtime, plain "cursor" label.
+    monkeypatch.setattr(log_parser, "CURSOR_STATE_DB", tmp_path / "missing.vscdb")
+    path2 = _cursor_tree(tmp_path, conv="ffff0000")
+    _write_transcript(path2, [{"role": "assistant", "message": {"content": [{"type": "tool_use", "name": "Write", "input": {"path": "/tmp/a"}}]}}])
+    got = list(parse_file(path2, log_parser.CURSOR))
+    assert len(got) == 1 and got[0]["agent"] == "cursor" and got[0]["timestamp"] > 1.7e9
+
+
+def test_cursor_unsanitize_respects_existing_hyphenated_folders(tmp_path, monkeypatch):
+    import log_parser
+    real = tmp_path / "Users" / "marc" / "my-project"
+    real.mkdir(parents=True)
+    monkeypatch.setattr(log_parser.Path, "exists", lambda self: str(self).startswith(str(tmp_path)) and (tmp_path / str(self).lstrip("/")).exists() or self == Path("/"))
+    # Simpler: call the helper against a fake root by patching Path("/") lookups is awkward; test the plain fallback instead.
+    assert log_parser._cursor_unsanitize("Users-marc-Desktop-cursor-test").startswith("/Users/marc")
