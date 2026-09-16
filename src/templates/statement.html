@@ -73,11 +73,7 @@
   .summary-links a.more-toggle { color: var(--accent); text-decoration: none; font-size: 13px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
   select.pick { padding: 5px 30px 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text); font: inherit; font-size: 13px; max-width: 420px; }
 </style>
-<script>
-  document.querySelectorAll("select[data-pick]").forEach(function (sel) {
-    sel.addEventListener("change", function () { if (sel.value) window.location.href = sel.value; });
-  });
-</script>
+
 <script>
   document.querySelectorAll(".summary-links [data-more]").forEach(function (a) {
     a.addEventListener("click", function (ev) {
@@ -281,4 +277,10 @@
 <div class="empty">None.</div>
 {% endif %}
 </section>
+<script>
+  // Pickers (Project / Agent / User dropdowns): choosing an entry opens the filtered page.
+  document.querySelectorAll("select[data-pick]").forEach(function (sel) {
+    sel.addEventListener("change", function () { if (sel.value) window.location.href = sel.value; });
+  });
+</script>
 {% endblock %}
