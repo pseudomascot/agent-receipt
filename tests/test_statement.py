@@ -262,5 +262,5 @@ def test_summary_is_linked_and_project_filter_works(tmp_path):
     html = client.get(f"/day/{DAY}?project=proj-a").get_data(as_text=True)
     assert "src/&lt;script&gt;" in html and "git commit -m hi" not in html
     assert "Filtered:" in html and "project: proj-a" in html and "2 of 4 actions" in html
-    assert 'href="/day/2026-09-14?type=execute&project=proj-a#actions"' in html            # type link keeps the project
+    assert 'href="/day/2026-09-14?type=execute&amp;project=proj-a#actions"' in html        # type link keeps the project
     assert "/export.csv?start=2026-09-14&end=2026-09-14&project=proj-a" in html
