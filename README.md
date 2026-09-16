@@ -124,6 +124,12 @@ Pieces, each runnable on its own from `src/`: `input_monitor.py`,
 - `docs/SOURCES.md` — where each agent's logs live and how they are read.
 - `docs/RECEIPT_LINE.md` — the open format any agent can write.
 
+## Support
+Agent Receipt is free and MIT-licensed, built by one person. If it's useful
+to you, a coffee is appreciated: https://ko-fi.com/pseudomascot. If you're
+using it for a business and want something sooner — a Windows version, an
+insurer-ready export — open an issue and say so; that's worth more than a tip.
+
 ## Every later session with Claude Code
 From this folder, run `claude` and paste:
 ```
