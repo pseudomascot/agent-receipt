@@ -99,7 +99,7 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     assert "&lt;script&gt;" in html and "<script>alert" not in html
     assert "<h3>proj-a" in html and "<h3>proj-b" in html
     assert "src/&lt;script&gt;alert(1)&lt;/script&gt;.txt" in html   # relative to project
-    assert '<details class="screen-only"><summary>python3 build.py' in html   # collapsed, leading cd stripped
+    assert '<details class="screen-only" open><summary>python3 build.py' in html   # in the details row, leading cd stripped
     assert "git commit -m hi" in html
     assert "git keeps history" in html                               # reversibility reason shown
     assert "https://example.com" in html                             # Unknown section
@@ -168,7 +168,7 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
     # Two alerts: the scheduled irreversible commit, and the seeded unknown-attribution row.
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
     assert "2 need review</a>" in html
-    assert 'class="flagged"' in html and "unattended irreversible" in html
+    assert 'class="row flagged"' in html and "unattended irreversible" in html
     assert "Needs review: 2 open alert(s)." in html                            # summary line
 
     html = client.get("/alerts").get_data(as_text=True)
@@ -183,7 +183,7 @@ def test_alerts_page_flagging_and_mark_seen(tmp_path):
     client.post("/alerts/seen", data={"all": "1"})
     assert "Nothing waiting" in client.get("/alerts").get_data(as_text=True)
     html = client.get(f"/day/{DAY}").get_data(as_text=True)
-    assert "Nothing needs review</a>" in html and 'class="flagged"' not in html
+    assert "Nothing needs review</a>" in html and 'row flagged"' not in html
 
 
 def test_web_links_are_clickable(tmp_path):
@@ -234,7 +234,7 @@ def test_subagent_rows_are_tagged(tmp_path):
     conn.close()
     html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
     assert 'title="claude-code / Explore: tidy tests">Sub-agent of Claude Code (1)</a>' in html   # plain-named chip
-    assert 'title="claude-code / Explore: tidy tests · sub-agent">Sub-agent of Claude Code</div>' in html and "tidy tests" in html
-    assert html.count('· sub-agent">Sub-agent of Claude Code</div>') == 1       # kind lives in the tooltip, once
-    assert html.count("· local agent\">") >= 3 and 'title="claude-code · local agent">Claude Code</div>' in html
+    assert 'title="claude-code / Explore: tidy tests · sub-agent · tidy tests">Sub-agent of Claude Code</span>' in html
+    assert html.count("· sub-agent · ") == 1                                    # kind lives in the tooltip, once
+    assert html.count('· local agent">') >= 3 and 'title="claude-code · local agent">Claude Code</span>' in html
     assert html.count("Who did it</th>") == 2 and ">Who</th>" not in html          # one table per project, no second Who column

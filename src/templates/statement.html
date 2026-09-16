@@ -10,6 +10,8 @@
   <button type="button" class="chip check" data-toggle-section="keyboard">Keyboard</button>
   <button type="button" class="chip check" data-toggle-section="unknown">Unexplained</button>
   <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
+  <span class="label" style="margin-left:10px">Rows</span>
+  <button type="button" class="chip check" data-toggle-density title="One tight line per action; click a row for its details">Compact</button>
 </div>
 {% endblock %}
 {% block body %}
@@ -89,26 +91,42 @@
 {% for project, rows in project_groups %}
 <div data-group="{{ loop.index }}">
 <h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
-<table>
-  <tr><th style="width:84px">Time</th><th style="width:230px">Who did it</th><th>What happened</th><th style="width:130px">Category</th><th style="width:130px">Undoable?</th></tr>
+<table class="sheet">
+  <colgroup><col style="width:76px"><col style="width:210px"><col><col style="width:120px"><col style="width:90px"></colgroup>
+  <tr><th>Time</th><th>Who did it</th><th>What happened</th><th>Category</th><th>Undoable?</th></tr>
   {% for a in rows %}
-  <tr data-type="{{ a.action_type }}"{% if a.id in alerted %} class="flagged"{% endif %}>
+  {% set d = agent_display(a.agent) %}
+  <tr data-type="{{ a.action_type }}" class="row{% if a.id in alerted %} flagged{% endif %}" data-row title="Click for details">
     <td class="time">{{ a.time }}</td>
-    {% set d = agent_display(a.agent) %}<td><div title="{{ a.agent }} · {{ d.kind }}">{{ d.name }}</div><div class="note">{{ d.sub }}{% if by_user|length > 1 %} · {{ a.user }}{% endif %}</div>
-      <div style="margin-top:4px"><span class="pill {{ a.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[a.attribution] }}</span> <span class="note">{{ a.note.split(' | ')[-1] }}</span></div></td>
-    <td>
-      <div>{{ a.what }}</div>
-      <div class="raw">
-      {% if a.is_long %}
-      <details class="screen-only"><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>
-      <pre class="full print-only">{{ a.full_target }}</pre>
-      {% else %}{{ a.full_target }}{% endif %}
+    <td class="oneline"><span title="{{ a.agent }} · {{ d.kind }}{% if d.sub %} · {{ d.sub }}{% endif %}">{{ d.name }}</span>
+      <span class="pill {{ a.attribution }} mini" title="{{ a.note.split(' | ')[-1] }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': '?'}[a.attribution] }}</span></td>
+    <td class="oneline"><span title="{{ a.full_target }}">{{ a.what }}</span>
+      {% if a.id in alerted %}<a href="/alerts" class="pill unknown mini" title="needs review: {{ alerted[a.id]|join(', ')|replace('_', ' ') }}">!</a>{% endif %}
+      {% if a.artifact_link and a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener" title="{{ a.artifact_link }}">↗</a>{% endif %}
+      <pre class="full print-only">{{ a.full_target }}</pre></td>
+    <td><span class="pill type mini">{{ type_label(a.action_type) }}</span></td>
+    <td class="oneline" title="{{ a.reversible_reason }}">{{ a.reversible }}</td>
+  </tr>
+  <tr class="details hidden" data-details>
+    <td colspan="5">
+      <div class="details-grid">
+        <div>
+          <div class="note"><b>{{ d.name }}</b>{% if d.sub %} · {{ d.sub }}{% endif %}{% if by_user|length > 1 %} · {{ a.user }}{% endif %} <span class="raw" style="display:inline">{{ a.agent }}</span></div>
+          <div class="note" style="margin-top:4px"><span class="pill {{ a.attribution }}">{{ {'agent': 'agent', 'human': 'person', 'unknown': 'unexplained'}[a.attribution] }}</span> {{ a.note.split(' | ')[-1] }}</div>
+          <div class="note" style="margin-top:4px"><b>Undoable:</b> {{ a.reversible }}{% if a.reversible_reason %} — {{ a.reversible_reason }}{% endif %}</div>
+          {% if a.id in alerted %}<div class="note" style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> {{ alerted[a.id]|join(', ')|replace('_', ' ') }}</div>{% endif %}
+        </div>
+        <div>
+          <div>{{ a.what }}</div>
+          <div class="raw">
+          {% if a.is_long %}
+          <details class="screen-only" open><summary>{{ a.short_target }}&hellip;</summary><pre class="full">{{ a.full_target }}</pre></details>
+          {% else %}{{ a.full_target }}{% endif %}
+          </div>
+          {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{% if a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a> <span class="raw" style="display:inline">{{ a.artifact_link[:80] }}{% if a.artifact_link|length > 80 %}…{% endif %}</span>{% else %}{{ a.artifact_link }}{% endif %}</div>{% endif %}
+        </div>
       </div>
-      {% if a.artifact_link and a.action_type != 'file_write' %}<div class="note">{% if a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a> <span class="raw" style="display:inline">{{ a.artifact_link[:80] }}{% if a.artifact_link|length > 80 %}…{% endif %}</span>{% else %}{{ a.artifact_link }}{% endif %}</div>{% endif %}
-      {% if a.id in alerted %}<div style="margin-top:4px"><a href="/alerts" class="pill unknown">needs review</a> <span class="note">{{ alerted[a.id]|join(', ')|replace('_', ' ') }}</span></div>{% endif %}
     </td>
-    <td><span class="pill type">{{ type_label(a.action_type) }}</span></td>
-    <td>{{ a.reversible }}{% if a.reversible_reason %}<div class="note">{{ a.reversible_reason }}</div>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>
@@ -146,15 +164,17 @@
 {% if unknown %}
 <div class="note">Actions where neither an agent's log nor keyboard activity says who did it.</div>
 <div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
-<table>
-  <tr><th style="width:84px">Time</th><th>What happened</th><th>Why unexplained</th></tr>
+<table class="sheet">
+  <colgroup><col style="width:76px"><col><col style="width:38%"></colgroup>
+  <tr><th>Time</th><th>What happened</th><th>Why unexplained</th></tr>
   {% for a in unknown %}
-  <tr data-type="{{ a.action_type }}">
+  <tr data-type="{{ a.action_type }}" class="row" data-row title="Click for details">
     <td class="time">{{ a.time }}</td>
-    <td><div>{{ a.what }}</div><div class="raw">{{ a.full_target }}</div>
-      {% if a.artifact_link and a.artifact_link.startswith('http') %}<div class="note"><a href="{{ a.artifact_link }}" target="_blank" rel="noopener">Open ↗</a></div>{% endif %}</td>
-    <td class="note">{{ a.note.split(' | ')[-1] }}</td>
+    <td class="oneline"><span title="{{ a.full_target }}">{{ a.what }}</span>
+      {% if a.artifact_link and a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener" title="{{ a.artifact_link }}">↗</a>{% endif %}</td>
+    <td class="oneline note" title="{{ a.note.split(' | ')[-1] }}">{{ a.note.split(' | ')[-1] }}</td>
   </tr>
+  <tr class="details hidden" data-details><td colspan="3"><div>{{ a.what }}</div><div class="raw">{{ a.full_target }}</div><div class="note">{{ a.note.split(' | ')[-1] }}</div></td></tr>
   {% endfor %}
 </table>
 {% else %}

@@ -81,6 +81,19 @@
   td.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; word-break: break-all; }
   table.compact { width: auto; min-width: 280px; }
   tr.flagged td { background: #fff8e6; }
+  /* Spreadsheet-style tables: one line per row, details on click. */
+  table.sheet { table-layout: fixed; }
+  table.sheet td.oneline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.sheet td.oneline > pre { display: none; }
+  table.sheet tr.row { cursor: pointer; }
+  table.sheet tr.row td { padding: 6px 10px; }
+  table.sheet tr.details td { background: var(--line-soft); border-bottom: 1px solid var(--line); cursor: default; white-space: normal; }
+  table.sheet tr.details .details-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 10px 24px; }
+  .pill.mini { padding: 1px 7px; font-size: 11px; }
+  body.dense table.sheet { font-size: 13px; }
+  body.dense table.sheet tr.row td { padding: 3px 8px; }
+  body.dense table.sheet td.time { font-size: 12px; }
+  @media print { table.sheet td.oneline { white-space: normal; } table.sheet td.oneline > pre { display: block; } table.sheet tr.details { display: none; } }
 
   .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .pill.agent { background: var(--agent-bg); color: var(--agent-fg); }
@@ -263,6 +276,25 @@ This proves the logs were not altered after the receipt read them; it cannot pro
       store.set("ar.hiddenTypes", hiddenTypes); applyTypes();
     });
   });
+  // Sheet rows: click a row to open its details; links inside keep working.
+  document.querySelectorAll("table.sheet tr[data-row]").forEach(function (row) {
+    row.addEventListener("click", function (ev) {
+      if (ev.target.closest("a")) return;
+      var d = row.nextElementSibling;
+      if (d && d.hasAttribute("data-details")) d.classList.toggle("hidden");
+    });
+  });
+  // Density: Compact (default) or roomy; remembered.
+  var dense = store.get("ar.dense");
+  if (dense === null) dense = true;
+  function applyDensity() {
+    document.body.classList.toggle("dense", dense);
+    document.querySelectorAll("[data-toggle-density]").forEach(function (chip) { chip.classList.toggle("off", !dense); });
+  }
+  document.querySelectorAll("[data-toggle-density]").forEach(function (chip) {
+    chip.addEventListener("click", function () { dense = !dense; store.set("ar.dense", dense); applyDensity(); });
+  });
+  applyDensity();
   applySections(); applyTypes();
 })();
 </script>

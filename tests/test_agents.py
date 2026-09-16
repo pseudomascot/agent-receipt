@@ -145,7 +145,7 @@ def test_nickname_flows_everywhere(tmp_path):
     conn.close()
     client = create_app(db).test_client()
     day = client.get("/day/2026-09-14").get_data(as_text=True)
-    assert '>Bookkeeping bot</div>' in day and "Bookkeeping bot (1)" in day                        # row + chip
+    assert '>Bookkeeping bot</span>' in day and "Bookkeeping bot (1)" in day                       # row + chip
     assert "Agents: Cowork · scheduled task (1), Claude Code (2), Bookkeeping bot (1)." in day or "Bookkeeping bot (1)." in day
     csv_text = client.get("/export.csv?start=2026-09-14&end=2026-09-14").get_data(as_text=True)
     assert "mailbox bot@example.com,Bookkeeping bot,sam" in csv_text                              # raw + label columns
