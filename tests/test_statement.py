@@ -277,3 +277,18 @@ def test_summary_folds_long_lists(tmp_path):
     assert html.count('data-more>+3 more</a>') == 2                                    # projects and agents fold after 5
     assert '<span class="more hidden">, <a href="/day/2026-09-14?project=' in html and 'p7 (1)</a>' in html
     assert "Log integrity: Log integrity" not in html
+
+
+def test_keyword_search(tmp_path):
+    db = tmp_path / "t.db"
+    _seed(db)
+    client = create_app(db).test_client()
+    html = client.get(f"/day/{DAY}?q=commit").get_data(as_text=True)
+    assert "git commit -m hi" in html and "python3 build.py" not in html and "src/&lt;script&gt;" not in html
+    assert "search “commit”" in html and "1 of 4 actions" in html and 'name="q" value="commit"' in html
+    html = client.get(f"/day/{DAY}?q=PROJ-A%20build").get_data(as_text=True)               # all words, any case, any field
+    assert "python3 build.py" in html and "git commit -m hi" not in html
+    assert client.get(f"/day/{DAY}?q=zzz-nothing").get_data(as_text=True).count("No actions") >= 1
+    html = client.get(f"/day/{DAY}?q=commit&type=execute").get_data(as_text=True)
+    assert 'name="type" value="execute"' in html and 'name="q" value="commit"' in html         # search keeps the type filter, and vice versa
+    assert "1 of 4 actions" in html

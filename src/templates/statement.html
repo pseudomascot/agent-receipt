@@ -21,7 +21,8 @@
 {% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
 {% set keep_group = '&group=project' if group_by_project else '' %}
 {% set keep_project = ('&project=' ~ (project_filter|urlencode)) if project_filter else '' %}
-{% set keep_all = keep_type ~ keep_agent ~ keep_user ~ keep_project ~ keep_group %}
+{% set keep_q = ('&q=' ~ (search|urlencode)) if search else '' %}
+{% set keep_all = keep_type ~ keep_agent ~ keep_user ~ keep_project ~ keep_group ~ keep_q %}
 <div class="print-only note">Statement for {{ label }}. Printed from the local Agent Receipt page.</div>
 
 <div class="page-title">
@@ -102,6 +103,17 @@
 
 <section class="card" data-section="actions">
 <h2>Actions</h2>
+<form method="get" action="{{ base_url }}" class="filters screen-only" style="gap:8px">
+  {% if type_filter %}<input type="hidden" name="type" value="{{ type_filter }}">{% endif %}
+  {% if agent_filter %}<input type="hidden" name="agent" value="{{ agent_filter }}">{% endif %}
+  {% if user_filter %}<input type="hidden" name="user" value="{{ user_filter }}">{% endif %}
+  {% if project_filter %}<input type="hidden" name="project" value="{{ project_filter }}">{% endif %}
+  {% if group_by_project %}<input type="hidden" name="group" value="project">{% endif %}
+  <span class="label">Search</span>
+  <input type="search" name="q" value="{{ search }}" placeholder="a word in what happened, a file, a command, an agent…" style="flex:1; min-width:220px; max-width:520px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--text); font:inherit; font-size:13px">
+  <button type="submit" class="chip">Find</button>
+  {% if search %}<a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions" class="chip">clear</a>{% endif %}
+</form>
 <div class="filters screen-only">
   <span class="label">Show</span>
   {% for type, n in by_type %}
@@ -112,23 +124,23 @@
 {% if by_agent|length > 1 %}
 <div class="filters screen-only">
   <span class="label">Agent</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
 {% if by_user|length > 1 %}
 <div class="filters screen-only">
   <span class="label">User</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
-  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
+  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_project }}{{ keep_group }}{{ keep_q }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
-{% if type_filter or agent_filter or user_filter or project_filter %}
-<div class="note">Filtered: {% if type_filter %}{{ type_label(type_filter) }} {% endif %}{% if agent_filter %}agent: {{ agent_display(agent_filter).name }} {% endif %}{% if user_filter %}user={{ user_filter }} {% endif %}{% if project_filter %}project: {{ project_filter }}{% endif %} — {{ shown_count }} of {{ total }} actions. <a href="{{ base_url }}#actions" class="screen-only">Clear</a></div>
+{% if type_filter or agent_filter or user_filter or project_filter or search %}
+<div class="note">Filtered: {% if type_filter %}{{ type_label(type_filter) }} {% endif %}{% if agent_filter %}agent: {{ agent_display(agent_filter).name }} {% endif %}{% if user_filter %}user={{ user_filter }} {% endif %}{% if project_filter %}project: {{ project_filter }} {% endif %}{% if search %}search “{{ search }}”{% endif %} — {{ shown_count }} of {{ total }} actions. <a href="{{ base_url }}#actions" class="screen-only">Clear</a></div>
 {% endif %}
 
 <span id="actions"></span>
