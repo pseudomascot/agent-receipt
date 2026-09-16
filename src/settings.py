@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 
 from agents import INSERT, RECEIPT_AGENT
-from config import (ENV_PATH, calendar_settings, email_settings, google_calendar_settings, load_env,
+from config import (ENV_PATH, calendar_settings, email_settings, github_settings, google_calendar_settings, load_env,
                     ramp_settings, stripe_settings)
 
 # field: (env key, label, kind, placeholder, help)   kinds: text | secret | select:a,b | toggle
@@ -57,6 +57,17 @@ SECTIONS = [
             ("RECEIPT_RAMP_AGENT", "Name for other Ramp purchases", "text", "", "Purchases not on an agent's fund appear under this name."),
         ],
         "links": [("Get sandbox access", "https://docs.ramp.com/developer-api/v1/sandbox-access")],
+    },
+    {
+        "id": "github", "title": "GitHub — an agent's own account", "doc": "docs/GITHUB.md",
+        "blurb": "For agents that run in the cloud: give the agent its own GitHub account, list it here, and every commit and "
+                 "pull request it makes is on the receipt, attributed to it. Read-only.",
+        "fields": [
+            ("RECEIPT_GITHUB_TOKEN", "Token", "secret", "", "A fine-grained token with read access to the repos (Contents, Metadata, Pull requests). Yours or the agent's."),
+            ("RECEIPT_GITHUB_AGENT_LOGINS", "Agent accounts", "text", "acme-bot, acme-reviewer", "GitHub usernames that belong to agents, comma-separated. Only their commits are read."),
+            ("RECEIPT_GITHUB_REPOS", "Repositories", "text", "", "owner/repo, comma-separated. Empty = every repo the token can see."),
+        ],
+        "links": [("Create a fine-grained token", "https://github.com/settings/personal-access-tokens/new")],
     },
     {
         "id": "google", "title": "Google Calendar", "doc": "docs/GOOGLE_CALENDAR.md",
@@ -142,6 +153,7 @@ def view(path: Path | None = None) -> dict:
         "ramp": ramp_settings(env) is not None,
         "google": google_calendar_settings(env) is not None,
         "calendar": calendar_settings(env) is not None,
+        "github": bool(github_settings(env) and github_settings(env)["agent_logins"]),
     }
     sections = []
     for section in SECTIONS:
@@ -276,6 +288,22 @@ def test_google(env: dict) -> tuple[bool, str]:
         return False, f"could not reach Google: {exc}"
 
 
+def test_github(env: dict) -> tuple[bool, str]:
+    from github_connector import GitHubError, repos_to_watch, whoami
+    s = github_settings(env)
+    if not s:
+        return False, "no token saved yet"
+    try:
+        me = whoami(s)
+        repos = repos_to_watch(s)
+        who = ", ".join(s["agent_logins"]) if s["agent_logins"] else "none yet — add the agents' GitHub usernames"
+        return bool(s["agent_logins"]), f"token works (signed in as {me['login']}); {len(repos)} repo(s) to watch; agent accounts: {who}"
+    except GitHubError as exc:
+        return False, f"GitHub refused: {exc}"
+    except OSError as exc:
+        return False, f"could not reach GitHub: {exc}"
+
+
 def test_calendar(env: dict) -> tuple[bool, str]:
     if not calendar_settings(env):
         return False, "switched off"
@@ -291,7 +319,8 @@ def test_calendar(env: dict) -> tuple[bool, str]:
     return True, f"the Calendar app answered: {out.stdout.strip()} calendar(s)"
 
 
-TESTS = {"mailbox": test_mailbox, "stripe": test_stripe, "ramp": test_ramp, "google": test_google, "calendar": test_calendar}
+TESTS = {"mailbox": test_mailbox, "stripe": test_stripe, "ramp": test_ramp, "google": test_google, "calendar": test_calendar,
+         "github": test_github}
 
 
 def run_test(section_id: str, path: Path | None = None) -> tuple[bool, str]:

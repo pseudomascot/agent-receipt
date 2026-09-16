@@ -16,6 +16,7 @@ from alerts import evaluate, notify, notify_new
 from correlator import correlate
 from calendar_connector import sync_if_configured as calendar_sync_if_configured
 from email_connector import sync_if_configured
+from github_connector import sync_if_configured as github_sync_if_configured
 from google_calendar import sync_if_configured as google_sync_if_configured
 from log_parser import SOURCES, current_user, ingest_all, reconcile
 from ramp_connector import sync_if_configured as ramp_sync_if_configured
@@ -42,6 +43,7 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
         calendar = calendar_sync_if_configured(conn, current_user()) if email else None
         google = google_sync_if_configured(conn, current_user()) if email else None
         ramp = ramp_sync_if_configured(conn, current_user()) if email else None
+        github = github_sync_if_configured(conn, current_user()) if email else None
         counts = correlate(conn)
         new_alerts = evaluate(conn)
         notified = notify_new(new_alerts, notifier)
@@ -60,6 +62,8 @@ def refresh(db_path=DB_PATH, sources=SOURCES, summaries_dir=SUMMARIES_DIR, notif
         result["google_calendar"] = google
     if ramp:
         result["ramp"] = ramp
+    if github:
+        result["github"] = github
     return result
 
 

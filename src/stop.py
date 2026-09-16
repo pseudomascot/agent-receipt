@@ -25,7 +25,8 @@ import uuid
 from pathlib import Path
 
 from agents import INSERT, RECEIPT_AGENT
-from config import calendar_settings, email_settings, google_calendar_settings, load_env, ramp_settings, stripe_settings
+from config import (calendar_settings, email_settings, github_settings, google_calendar_settings, load_env,
+                    ramp_settings, stripe_settings)
 from google_calendar import TOKEN_PATH, _post_form, load_token
 from ramp_connector import RampError, funds_for_agents, set_fund_state
 from stripe_connector import StripeError, request
@@ -142,6 +143,18 @@ def controls(env: dict | None = None, conn: sqlite3.Connection | None = None) ->
             "The agent's account is untouched — only the receipt stops seeing it.",
             reason="run examples/google_calendar_auth.py to sign in again"))
 
+    github = github_settings(env)
+    if github:
+        for login in github["agent_logins"]:
+            out.append(_control(
+                f"github_revoke:{login}", f"github ({login})", "Cut the agent's GitHub account off", "link", STOPS,
+                "GitHub has no API to suspend someone else's account, but you can take away everything it can reach: "
+                "remove it from your repositories and organisation, and revoke its tokens if you hold that login.",
+                f"https://github.com/{login}",
+                [f"In each repository: Settings → Collaborators → remove {login} (or Organisation → People → remove).",
+                 f"If you control the {login} account: sign in as it → Settings → Developer settings → revoke its tokens and SSH keys.",
+                 "Revoke any GitHub App or OAuth authorisation the agent uses."],
+                reason="access can be granted again"))
     if calendar_settings(env):
         out.append(_control(
             "mac_calendar", calendar_settings(env)["agent"], "Take away Agent Receipt's Calendar permission", "link", BLINDS,

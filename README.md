@@ -102,6 +102,9 @@ button — or by hand in the private `.env`.
   `send_email` rows; card-issuer alert emails become `purchase` rows.
 - **Stripe:** a key in `.env` (`docs/STRIPE.md`). Charges the agent collects,
   and purchases on its own Issuing card where Issuing is activated.
+- **GitHub (an agent's own account):** for cloud coding agents — list the
+  agent's GitHub username and every commit and pull request it makes is on
+  the receipt, attributed to it, linked to GitHub (`docs/GITHUB.md`).
 - **Ramp (a card and budget per agent):** client credentials in `.env`
   (`docs/RAMP.md`). The Agents page can *give an agent its own Ramp fund* —
   a budget that issues a virtual card — so its purchases are its own by

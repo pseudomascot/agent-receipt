@@ -129,3 +129,19 @@ def ramp_settings(env: dict | None = None) -> dict | None:
 
 def ramp_configured() -> bool:
     return ramp_settings() is not None
+
+
+def github_settings(env: dict | None = None) -> dict | None:
+    """GitHub read-only token + the agents' own GitHub logins (docs/GITHUB.md), or None."""
+    env = env if env is not None else load_env()
+    token = (env.get("RECEIPT_GITHUB_TOKEN") or "").strip()
+    if not token or "PASTE" in token or token.endswith("..."):
+        return None
+    logins = [l.strip().lstrip("@") for l in (env.get("RECEIPT_GITHUB_AGENT_LOGINS") or "").split(",") if l.strip()]
+    repos = [r.strip() for r in (env.get("RECEIPT_GITHUB_REPOS") or "").split(",") if r.strip() and "/" in r]
+    return {"token": token, "agent_logins": logins, "repos": repos}
+
+
+def github_configured() -> bool:
+    s = github_settings()
+    return bool(s and s["agent_logins"])

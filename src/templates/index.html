@@ -35,6 +35,7 @@
   {% endfor %}
   <tr><td>Agent mailbox (email + card alerts)</td><td>{% if machine.email %}<span class="pill covered">configured</span>{% else %}<a href="/settings#settings-mailbox" class="note">not set up — open Settings</a>{% endif %}</td></tr>
   <tr><td>Stripe</td><td>{% if machine.stripe %}<span class="pill covered">configured</span>{% else %}<a href="/settings#settings-stripe" class="note">not set up — open Settings</a>{% endif %}</td></tr>
+  <tr><td>GitHub (an agent's own account: commits and pull requests)</td><td>{% if machine.github %}<span class="pill covered">configured</span>{% else %}<a href="/settings#settings-github" class="note">not set up — open Settings</a>{% endif %}</td></tr>
   <tr><td>Ramp (a card and budget per agent)</td><td>{% if machine.ramp %}<span class="pill covered">configured</span>{% else %}<a href="/settings#settings-ramp" class="note">not set up — open Settings</a>{% endif %}</td></tr>
   <tr><td>Keyboard &amp; mouse watch</td><td>{% if machine.db.monitor_running %}<span class="pill covered">running</span>{% else %}<span class="pill not">not running</span> <span class="note">open Agent Receipt.app; it needs the Accessibility permission</span>{% endif %}</td></tr>
 </table>

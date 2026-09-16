@@ -16,7 +16,8 @@ import sqlite3
 import time
 from datetime import datetime
 
-from config import calendar_settings, email_settings, google_calendar_settings, load_env, ramp_settings, stripe_settings
+from config import (calendar_settings, email_settings, github_settings, google_calendar_settings, load_env,
+                    ramp_settings, stripe_settings)
 
 RECEIPT_AGENT = "agent receipt"          # rows the app writes about its own buttons
 LOCAL_HARNESSES = {"claude-code": "Claude Code", "cowork": "Cowork", "codex": "Codex", "cursor": "Cursor"}
@@ -42,6 +43,10 @@ def known_identities(env: dict | None = None) -> dict:
     ramp = ramp_settings(env)
     if ramp:
         out[ramp["agent"]] = ("card", f"a Ramp account ({ramp['mode']}) — transactions not on a fund issued to an agent")
+    github = github_settings(env)
+    if github:
+        for login in github["agent_logins"]:
+            out[f"github ({login})"] = ("github account", f"its own GitHub account, {login}")
     cal = calendar_settings(env)
     if cal:
         out[cal["agent"]] = ("calendar", "the Mac Calendar app (no login of its own)")
@@ -66,6 +71,8 @@ def kind_of(name: str, known: dict) -> tuple[str, str]:
         return "local agent", what
     if name.startswith("google calendar ("):
         return "google account", "a Google account not listed in RECEIPT_GOOGLE_AGENT_EMAILS"
+    if name.startswith("github ("):
+        return "github account", "a GitHub account not listed in RECEIPT_GITHUB_AGENT_LOGINS"
     return "declared", "declares its own actions through the receipt-line inbox"
 
 
@@ -116,6 +123,8 @@ def _plain(name: str, kind: str, what: str, known: dict) -> tuple[str, str]:
     paren = paren[:-1] if paren.endswith(")") else paren
     if head == "google calendar" and paren:
         return "Google account", paren
+    if head == "github" and paren:
+        return "GitHub account", paren
     if name in known:
         return name, what
     if head == "claude-code":

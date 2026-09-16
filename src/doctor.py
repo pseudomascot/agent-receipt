@@ -10,7 +10,8 @@ import sys
 import time
 from pathlib import Path
 
-from config import calendar_configured, email_configured, google_calendar_configured, ramp_configured, stripe_configured
+from config import (calendar_configured, email_configured, github_configured, google_calendar_configured,
+                    ramp_configured, stripe_configured)
 from log_parser import SOURCES, find_transcripts
 from store import DB_PATH
 
@@ -75,6 +76,7 @@ def status(db_path: Path = DB_PATH, sources=SOURCES) -> dict:
         "calendar": calendar_configured(),
         "google_calendar": google_calendar_configured(),
         "ramp": ramp_configured(),
+        "github": github_configured(),
         "accessibility": accessibility_granted(),
         "db": db,
     }
@@ -104,6 +106,7 @@ def report(s: dict) -> str:
     lines.append(f"  {'✓' if s.get('calendar') else '·'} Calendar (Mac): {'on' if s.get('calendar') else 'off — set RECEIPT_CALENDAR=on (docs/CALENDAR.md)'}")
     lines.append(f"  {'✓' if s.get('google_calendar') else '·'} Google Calendar: {'configured' if s.get('google_calendar') else 'not set up — Settings page or docs/GOOGLE_CALENDAR.md'}")
     lines.append(f"  {'✓' if s.get('ramp') else '·'} Ramp (agent cards): {'configured' if s.get('ramp') else 'not set up — Settings page or docs/RAMP.md'}")
+    lines.append(f"  {'✓' if s.get('github') else '·'} GitHub (agent accounts): {'configured' if s.get('github') else 'not set up — Settings page or docs/GITHUB.md'}")
     lines.append("")
     acc = s["accessibility"]
     if acc is True:
