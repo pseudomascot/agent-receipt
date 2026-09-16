@@ -263,4 +263,4 @@ def test_summary_is_linked_and_project_filter_works(tmp_path):
     assert "src/&lt;script&gt;" in html and "git commit -m hi" not in html
     assert "Filtered:" in html and "project: proj-a" in html and "2 of 4 actions" in html
     assert 'href="/day/2026-09-14?type=execute&amp;project=proj-a#actions"' in html        # type link keeps the project
-    assert "/export.csv?start=2026-09-14&end=2026-09-14&project=proj-a" in html
+    assert "/export.csv?start=2026-09-14&end=2026-09-14&amp;project=proj-a" in html   # literal & stays, variable & is escaped
