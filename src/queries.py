@@ -20,6 +20,8 @@ STATIC_COVERAGE = [
      "Read from Cursor's agent transcripts: files written or deleted, commands run, other tools. Times come from Cursor's turn stamps (minute precision)."),
     ("Any other agent that writes receipt lines", "covered",
      "One JSON line per side effect appended to ~/.agent-receipt/inbox/ (see docs/RECEIPT_LINE.md)."),
+    ("Agents running in the cloud (Claude on the web, Cursor or Codex cloud agents, hosted agents)", "partial",
+     "No log on this Mac. Seen only through the mailbox, card, calendar or account you have given them — their consequences, not their commands."),
     ("Google Antigravity", "not covered",
      "Keeps conversations as binary protobuf files with no published schema."),
     ("Physical keyboard/mouse activity", "partial",

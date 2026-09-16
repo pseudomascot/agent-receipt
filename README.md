@@ -110,7 +110,11 @@ button — or by hand in the private `.env`.
 
 ## What it does not see
 Claude Desktop chat (outside the Code tab), Google Antigravity, and — until
-configured — email, cards, and wallets. The page says so on every screen.
+configured — email, cards, and wallets. **Agents that run in the cloud**
+(Claude on the web, Cursor or Codex cloud agents, hosted agents) leave no log
+on the Mac: they are seen only through the mailbox, card or account you have
+given them — their consequences, not their commands. The page says so on
+every screen.
 
 ## For developers
 ```
