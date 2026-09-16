@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Agent Receipt — Settings{% endblock %}
 {% block body %}
-<div class="page-title"><h1>Settings</h1><span class="sub">connect what the agents act with</span></div>
+<div class="page-title"><h1>Settings</h1><span class="sub">the agents are found automatically; connect what they act with</span></div>
 
 {% if message %}
 <div class="card" style="padding:12px 16px; margin-bottom:16px; border-left:4px solid {{ 'var(--human-fg)' if ok else 'var(--bad-fg)' }}">
@@ -14,6 +14,20 @@
   Passwords and keys are never shown again after saving; leave a secret blank to keep the saved one.
   Each save is recorded on the receipt by field name, never by value. Nothing here is required — without it the receipt still covers every agent on this Mac.
 </div>
+
+<section class="card" data-section="settings-agents">
+<h2>Agents on this Mac <span class="pill covered" style="text-transform:none; letter-spacing:0">nothing to connect</span></h2>
+<div class="note" style="margin-bottom:10px">Claude Code, Cowork, Codex and Cursor are read from the logs they already keep on this Mac — no key, no login, no setup.
+  Each appears here as soon as it has run once. Any other agent joins by writing receipt lines (docs/RECEIPT_LINE.md).</div>
+<table class="compact" style="min-width:520px">
+  {% for src in agents_here %}
+  <tr><td>{{ src.label }}</td>
+    <td>{% if src.files %}<span class="pill covered">found</span> <span class="note">{{ src.files }} transcript{{ '' if src.files == 1 else 's' }}, {{ src.mb }} MB, read automatically</span>
+      {% elif src.name == 'inbox' %}<span class="note">empty — no agent has written receipt lines yet</span>
+      {% else %}<span class="note">not found yet — appears after it runs once</span>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+</section>
 
 {% for s in sections %}
 <section class="card" data-section="settings-{{ s.id }}">

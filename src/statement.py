@@ -272,7 +272,9 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
     @app.route("/settings")
     def settings_view():
         data = settings_page.view()
+        agents_here = machine_status(db_path)["sources"]
         return render_template("settings.html", coverage_notes=coverage_notes(), integrity=None, nav="settings",
+                               agents_here=agents_here,
                                message=request.args.get("msg"), ok=request.args.get("ok") == "1",
                                ramp_users=settings_page.ramp_user_choices() if request.args.get("users") != "0" else [], **data)
 

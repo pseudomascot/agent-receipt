@@ -85,6 +85,7 @@ def test_settings_page_and_routes(tmp_path, monkeypatch):
     client = create_app(db).test_client()
     html = client.get("/settings").get_data(as_text=True)
     assert 'href="/settings" class="on"' in html and "Agent mailbox" in html and "Sign in as the agent" in html
+    assert "Agents on this Mac" in html and "nothing to connect" in html and "Cursor (agent conversations)" in html
     assert html.count("not set up") >= 5 and 'type="password"' in html
     resp = client.post("/settings/save/stripe", data={"RECEIPT_STRIPE_TEST_KEY": "sk_test_zzsecret", "RECEIPT_STRIPE_AGENT": "Agent card"})
     assert resp.status_code == 302 and "saved+RECEIPT_STRIPE_TEST_KEY%2C+RECEIPT_STRIPE_AGENT" in resp.headers["Location"]

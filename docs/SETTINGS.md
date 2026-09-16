@@ -5,6 +5,10 @@ the app instead of editing a text file. Nothing on it is required: with no
 settings at all the receipt still covers every agent on the Mac (Claude Code,
 Cowork, Codex, Cursor, and anything writing receipt lines).
 
+The first card, **Agents on this Mac**, is read-only: Claude Code, Cowork,
+Codex and Cursor need nothing entered — they are read from the logs they
+already keep, and appear as "found" once they have run once.
+
 One card per connector — **Agent mailbox**, **Stripe**, **Ramp**, **Google
 Calendar**, **Mac Calendar** — each with:
 
