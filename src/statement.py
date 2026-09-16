@@ -83,7 +83,7 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
             summary=summary_text(data, integrity, open_alerts, names),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
             integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(),
-            retired=retired, **data)
+            retired=retired, group_by_project=request.args.get("group") == "project", **data)
 
     @app.route("/")
     def index():

@@ -274,6 +274,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         if a["attribution"] != "unknown":
             groups.setdefault(a["project"], []).append(a)
     project_groups = sorted(groups.items(), key=lambda kv: -kv[1][0]["timestamp"])
+    flat_rows = sorted([a for a in shown if a["attribution"] != "unknown"], key=lambda a: -a["timestamp"])
 
     intervals = conn.execute(
         "SELECT started_at, ended_at FROM coverage WHERE source = 'input' "
@@ -301,6 +302,7 @@ def statement(conn: sqlite3.Connection, start_day: date, end_day: date,
         "by_day": sorted(by_day.items(), reverse=True),
         "shown": shown,
         "project_groups": project_groups,
+        "flat_rows": flat_rows,
         "shown_count": len(shown),
         "unknown": sorted([a for a in shown if a["attribution"] == "unknown"], key=lambda a: -a["timestamp"]),
         "total": len(actions),

@@ -12,12 +12,14 @@
   <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
   <span class="label" style="margin-left:10px">Rows</span>
   <button type="button" class="chip check" data-toggle-density title="One tight line per action; click a row for its details">Compact</button>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_user }}{% if not group_by_project %}&group=project{% endif %}#actions" class="chip check{% if not group_by_project %} off{% endif %}" title="Group actions under the project they happened in; off = one list, newest first">Group by project</a>
 </div>
 {% endblock %}
 {% block body %}
 {% set keep_agent = ('&agent=' ~ (agent_filter|urlencode)) if agent_filter else '' %}
 {% set keep_user = ('&user=' ~ (user_filter|urlencode)) if user_filter else '' %}
 {% set keep_type = ('&type=' ~ type_filter) if type_filter else '' %}
+{% set keep_group = '&group=project' if group_by_project else '' %}
 <div class="print-only note">Statement for {{ label }}. Printed from the local Agent Receipt page.</div>
 
 <div class="page-title">
@@ -66,18 +68,18 @@
 {% if by_agent|length > 1 %}
 <div class="filters screen-only">
   <span class="label">Agent</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_user }}{{ keep_group }}#actions" class="chip{% if not agent_filter %} on{% endif %}">all</a>
   {% for agent, n in by_agent %}
-  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
+  <a href="{{ base_url }}?agent={{ agent|urlencode }}{{ keep_type }}{{ keep_user }}{{ keep_group }}#actions" class="chip{% if agent_filter == agent %} on{% endif %}" title="{{ agent }}">{{ agent_display(agent).name }}{% if agent in retired %} · retired{% endif %} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
 {% if by_user|length > 1 %}
 <div class="filters screen-only">
   <span class="label">User</span>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
+  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_group }}#actions" class="chip{% if not user_filter %} on{% endif %}">all</a>
   {% for user, n in by_user %}
-  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
+  <a href="{{ base_url }}?user={{ user|urlencode }}{{ keep_type }}{{ keep_agent }}{{ keep_group }}#actions" class="chip{% if user_filter == user %} on{% endif %}">{{ user }} ({{ n }})</a>
   {% endfor %}
 </div>
 {% endif %}
@@ -87,13 +89,10 @@
 
 <span id="actions"></span>
 <div class="note screen-only"><span data-hidden-note></span><a href="#" data-show-all class="hidden">show all categories</a></div>
-{% if project_groups %}
-{% for project, rows in project_groups %}
-<div data-group="{{ loop.index }}">
-<h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
+{% macro action_table(rows, show_project) %}
 <table class="sheet">
-  <colgroup><col style="width:76px"><col style="width:210px"><col><col style="width:120px"><col style="width:90px"></colgroup>
-  <tr><th>Time</th><th>Who did it</th><th>What happened</th><th>Category</th><th>Undoable?</th></tr>
+  <colgroup><col style="width:76px"><col style="width:210px"><col>{% if show_project %}<col style="width:130px">{% endif %}<col style="width:120px"><col style="width:90px"></colgroup>
+  <tr><th>Time</th><th>Who did it</th><th>What happened</th>{% if show_project %}<th>Project</th>{% endif %}<th>Category</th><th>Undoable?</th></tr>
   {% for a in rows %}
   {% set d = agent_display(a.agent) %}
   <tr data-type="{{ a.action_type }}" class="row{% if a.id in alerted %} flagged{% endif %}" data-row title="Click for details">
@@ -104,11 +103,12 @@
       {% if a.id in alerted %}<a href="/alerts" class="pill unknown mini" title="needs review: {{ alerted[a.id]|join(', ')|replace('_', ' ') }}">!</a>{% endif %}
       {% if a.artifact_link and a.artifact_link.startswith('http') %}<a href="{{ a.artifact_link }}" target="_blank" rel="noopener" title="{{ a.artifact_link }}">↗</a>{% endif %}
       <pre class="full print-only">{{ a.full_target }}</pre></td>
+    {% if show_project %}<td class="oneline note" title="{{ a.project }}">{{ a.project }}</td>{% endif %}
     <td><span class="pill type mini">{{ type_label(a.action_type) }}</span></td>
     <td class="oneline" title="{{ a.reversible_reason }}">{{ a.reversible }}</td>
   </tr>
   <tr class="details hidden" data-details>
-    <td colspan="5">
+    <td colspan="{{ 6 if show_project else 5 }}">
       <div class="details-grid">
         <div>
           <div class="note"><b>{{ d.name }}</b>{% if d.sub %} · {{ d.sub }}{% endif %}{% if by_user|length > 1 %} · {{ a.user }}{% endif %} <span class="raw" style="display:inline">{{ a.agent }}</span></div>
@@ -130,10 +130,26 @@
   </tr>
   {% endfor %}
 </table>
+{% endmacro %}
+{% if group_by_project %}
+{% if project_groups %}
+{% for project, rows in project_groups %}
+<div data-group="{{ loop.index }}">
+<h3>{{ project }} <span class="muted">{{ rows|length }} action{{ '' if rows|length == 1 else 's' }}</span></h3>
+{{ action_table(rows, false) }}
 </div>
 {% endfor %}
 {% else %}
 <div class="empty">No actions{% if type_filter %} in {{ type_label(type_filter) }}{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
+{% endif %}
+{% else %}
+{% if flat_rows %}
+<div data-group="1">
+{{ action_table(flat_rows, true) }}
+</div>
+{% else %}
+<div class="empty">No actions{% if type_filter %} in {{ type_label(type_filter) }}{% endif %} {% if single_day %}on this day{% else %}in this range{% endif %}.</div>
+{% endif %}
 {% endif %}
 </section>
 

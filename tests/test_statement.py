@@ -95,7 +95,7 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)
     client = create_app(db).test_client()
-    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    html = client.get(f"/day/{DAY}?group=project").get_data(as_text=True)
     assert "&lt;script&gt;" in html and "<script>alert" not in html
     assert "<h3>proj-a" in html and "<h3>proj-b" in html
     assert "src/&lt;script&gt;alert(1)&lt;/script&gt;.txt" in html   # relative to project
@@ -112,11 +112,20 @@ def test_day_page_groups_by_project_and_escapes(tmp_path):
 def test_actions_are_newest_first(tmp_path):
     db = tmp_path / "t.db"
     _seed(db)
-    html = create_app(db).test_client().get(f"/day/{DAY}").get_data(as_text=True)
+    client = create_app(db).test_client()
+    html = client.get(f"/day/{DAY}?group=project").get_data(as_text=True)
     # proj-b's latest action (T+90) is newer than proj-a's (T+60): proj-b group comes first.
     assert html.index("<h3>proj-b") < html.index("<h3>proj-a")
     # Within proj-a, the T+60 command is listed above the T file write.
     assert html.index("python3 build.py") < html.index("src/&lt;script&gt;")
+    # Default: one flat list, newest first across projects, with a Project column.
+    html = client.get(f"/day/{DAY}").get_data(as_text=True)
+    assert "<h3>proj-a" not in html and "<th>Project</th>" in html
+    assert html.index("git commit -m hi") < html.index("python3 build.py") < html.index("src/&lt;script&gt;")
+    assert 'title="proj-b">proj-b</td>' in html
+    assert "&group=project#actions" in html and 'class="chip check off"' in html               # the toggle, off
+    html = client.get(f"/day/{DAY}?group=project&type=execute").get_data(as_text=True)
+    assert "<h3>proj-a" in html and 'href="/day/2026-09-14?&type=execute#actions" class="chip check"' in html   # toggle keeps the filter
 
 
 def test_day_page_type_filter(tmp_path):
@@ -237,4 +246,4 @@ def test_subagent_rows_are_tagged(tmp_path):
     assert 'title="claude-code / Explore: tidy tests · sub-agent · tidy tests">Sub-agent of Claude Code</span>' in html
     assert html.count("· sub-agent · ") == 1                                    # kind lives in the tooltip, once
     assert html.count('· local agent">') >= 3 and 'title="claude-code · local agent">Claude Code</span>' in html
-    assert html.count("Who did it</th>") == 2 and ">Who</th>" not in html          # one table per project, no second Who column
+    assert html.count("Who did it</th>") == 1 and ">Who</th>" not in html          # one flat table, no second Who column
