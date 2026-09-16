@@ -21,6 +21,7 @@ from log_parser import current_user
 from ramp_connector import RampError, issue_fund
 from queries import (ACTION_TYPES, coverage_notes, day_bounds, earliest_day, list_days, money_summary,
                      statement, type_label)
+import settings as settings_page
 from stop import controls as stop_controls
 from stop import presses as stop_presses
 from stop import run as stop_run_control
@@ -267,6 +268,46 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         return redirect("/stop?" + urlencode({"msg": result["message"], "ok": "1" if result["ok"] else "0"}))
+
+    @app.route("/settings")
+    def settings_view():
+        data = settings_page.view()
+        return render_template("settings.html", coverage_notes=coverage_notes(), integrity=None, nav="settings",
+                               message=request.args.get("msg"), ok=request.args.get("ok") == "1",
+                               ramp_users=settings_page.ramp_user_choices() if request.args.get("users") != "0" else [], **data)
+
+    @app.route("/settings/save/<section_id>", methods=["POST"])
+    def settings_save(section_id):
+        conn = db()
+        try:
+            changed = settings_page.save(section_id, {k: request.form.getlist(k) for k in request.form}, current_user(), conn)
+        finally:
+            conn.close()
+        title = settings_page.SECTION_BY_ID.get(section_id, {}).get("title", section_id)
+        msg = f"{title}: saved {', '.join(changed)}" if changed else f"{title}: nothing changed"
+        return redirect("/settings?" + urlencode({"msg": msg, "ok": "1"}) + f"#settings-{section_id}")
+
+    @app.route("/settings/test/<section_id>", methods=["POST"])
+    def settings_test(section_id):
+        # Save first so the test uses what was just typed, then make one read-only call.
+        conn = db()
+        try:
+            settings_page.save(section_id, {k: request.form.getlist(k) for k in request.form}, current_user(), conn)
+        finally:
+            conn.close()
+        ok, message = settings_page.run_test(section_id)
+        title = settings_page.SECTION_BY_ID.get(section_id, {}).get("title", section_id)
+        return redirect("/settings?" + urlencode({"msg": f"{title}: {message}", "ok": "1" if ok else "0"}) + f"#settings-{section_id}")
+
+    @app.route("/settings/google-signin", methods=["POST"])
+    def settings_google_signin():
+        conn = db()
+        try:
+            settings_page.save("google", {k: request.form.getlist(k) for k in request.form}, current_user(), conn)
+        finally:
+            conn.close()
+        message = settings_page.start_google_signin(Path(__file__).resolve().parent.parent)
+        return redirect("/settings?" + urlencode({"msg": f"Google Calendar: {message}", "ok": "1"}) + "#settings-google")
 
     @app.route("/alerts")
     def alerts_page():

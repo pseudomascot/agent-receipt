@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Agent Receipt — Settings{% endblock %}
+{% block body %}
+<div class="page-title"><h1>Settings</h1><span class="sub">connect what the agents act with</span></div>
+
+{% if message %}
+<div class="card" style="padding:12px 16px; margin-bottom:16px; border-left:4px solid {{ 'var(--human-fg)' if ok else 'var(--bad-fg)' }}">
+  <b>{{ 'OK' if ok else 'Not yet' }}.</b> {{ message }}
+</div>
+{% endif %}
+
+<div class="note" style="margin-bottom:14px">
+  Everything you enter is saved to a private file on this Mac (<span class="raw" style="display:inline">{{ env_path }}</span>) and used only by this app.
+  Passwords and keys are never shown again after saving; leave a secret blank to keep the saved one.
+  Each save is recorded on the receipt by field name, never by value. Nothing here is required — without it the receipt still covers every agent on this Mac.
+</div>
+
+{% for s in sections %}
+<section class="card" data-section="settings-{{ s.id }}">
+<h2>{{ s.title }} {% if s.configured %}<span class="pill covered" style="text-transform:none; letter-spacing:0">connected</span>{% else %}<span class="pill type" style="text-transform:none; letter-spacing:0">not set up</span>{% endif %}</h2>
+<div class="note" style="margin-bottom:10px">{{ s.blurb }}
+  {% for text, url in s.links %} · <a href="{{ url }}" target="_blank" rel="noopener">{{ text }} ↗</a>{% endfor %}
+  · <span class="raw" style="display:inline">{{ s.doc }}</span></div>
+<form method="post" action="/settings/save/{{ s.id }}" class="settings-form">
+  {% for f in s.fields %}
+  <label class="field">
+    <span class="field-label">{{ f.label }}</span>
+    {% if f.kind == 'secret' %}
+      <input type="password" name="{{ f.key }}" autocomplete="off" placeholder="{{ '•••••••• saved — leave blank to keep' if f.saved else 'paste here' }}">
+      {% if f.saved %}<span class="note"><input type="checkbox" name="clear_{{ f.key }}" value="1"> remove</span>{% endif %}
+    {% elif f.kind.startswith('select:') %}
+      <select name="{{ f.key }}">{% for opt in f.kind[7:].split(',') %}<option value="{{ opt }}"{% if (f.value or f.placeholder) == opt %} selected{% endif %}>{{ opt }}</option>{% endfor %}</select>
+    {% elif f.kind == 'toggle' %}
+      <select name="{{ f.key }}"><option value="off"{% if f.value != 'on' %} selected{% endif %}>off</option><option value="on"{% if f.value == 'on' %} selected{% endif %}>on</option></select>
+    {% elif f.kind == 'ramp_user' %}
+      {% if ramp_users %}
+      <select name="{{ f.key }}"><option value="">— choose —</option>{% for u in ramp_users %}<option value="{{ u.id }}"{% if f.value == u.id %} selected{% endif %}>{{ u.name or u.email }} ({{ (u.role or '')|lower|replace('_', ' ') }})</option>{% endfor %}</select>
+      {% else %}
+      <input type="text" name="{{ f.key }}" value="{{ f.value }}" placeholder="save the client id and secret first, then this becomes a list">
+      {% endif %}
+    {% else %}
+      <input type="text" name="{{ f.key }}" value="{{ f.value }}" placeholder="{{ f.placeholder }}" autocomplete="off">
+    {% endif %}
+    {% if f.help %}<span class="note">{{ f.help }}</span>{% endif %}
+  </label>
+  {% endfor %}
+  <div class="actions">
+    <button type="submit" class="btn primary">Save</button>
+    <button type="submit" class="btn" formaction="/settings/test/{{ s.id }}" formmethod="post" title="Makes one read-only call and reports back">Test</button>
+    {% if s.id == 'google' %}<button type="submit" class="btn" formaction="/settings/google-signin" formmethod="post">{{ 'Sign in again' if google_signed_in else 'Sign in as the agent' }}</button>
+      <span class="note">{{ 'signed in' if google_signed_in else 'not signed in yet' }}</span>{% endif %}
+  </div>
+</form>
+</section>
+{% endfor %}
+
+<style>
+  .settings-form .field { display: grid; grid-template-columns: 200px minmax(200px, 460px) 1fr; gap: 6px 14px; align-items: center; margin: 0 0 8px; }
+  .settings-form .field-label { font-size: 14px; color: var(--muted); }
+  .settings-form input[type=text], .settings-form input[type=password], .settings-form select {
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-size: 14px; width: 100%; }
+  .settings-form .actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  @media (max-width: 700px) { .settings-form .field { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}

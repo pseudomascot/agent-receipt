@@ -32,8 +32,9 @@ echo "Installing the two dependencies (pynput, flask) into .venv ..."
 echo "Dependencies: ok"
 
 if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "Created .env from .env.example (optional: fill it in later for email and Stripe; it stays private)."
+  printf '# Agent Receipt private settings. Edit from the app: http://127.0.0.1:8765/settings\n# (or by hand, see .env.example). This file is git-ignored and never shown.\n' > .env
+  chmod 600 .env
+  echo "Created an empty private settings file (.env). Connectors are optional; add them later from the app's Settings page."
 fi
 
 echo
@@ -43,6 +44,7 @@ echo "Next:"
 echo "  1. If the report says the input monitor permission is NOT granted: System Settings →"
 echo "     Privacy & Security → Accessibility → turn on Terminal. (Only timestamps are ever recorded.)"
 echo "  2. Double-click \"Agent Receipt.command\" to start. Your statement opens at http://127.0.0.1:8765/"
-echo "  3. Close that window to stop."
+echo "  3. Optional: connect a mailbox, Stripe, Ramp or Google Calendar at http://127.0.0.1:8765/settings"
+echo "  4. Close that window to stop."
 echo
 printf 'Press Enter to close.'; read -r _

@@ -32,7 +32,7 @@ def test_status_and_report(tmp_path, monkeypatch):
     assert "✓ Claude Code: 1 transcript(s)" in text
     assert "Codex (OpenAI): not found" in text
     assert "NOT granted" in text and "Database: not created yet" in text
-    assert "Stripe: configured" in text and "Agent mailbox (email + card alerts): not configured" in text
+    assert "Stripe: configured" in text and "Agent mailbox (email + card alerts): not set up — Settings page" in text
 
 
 def test_status_reads_database(tmp_path, monkeypatch):

@@ -27,6 +27,8 @@ happened, never which one — see `src/input_monitor.py` and the schema in
    *that* you pressed a key or clicked — never which key, never where.
 4. **Double-click `Agent Receipt.command`.** A Terminal window stays open and
    your statement opens at http://127.0.0.1:8765/. Close the window to stop.
+5. Optional: open **Settings** in the app to connect a mailbox, Stripe, Ramp
+   or Google Calendar. Nothing is required for the agents on this Mac.
 
 The first run reads everything your agents have ever logged (tens of
 thousands of lines take seconds), then refreshes every five minutes.
@@ -92,8 +94,11 @@ stay inside this folder; `make_app.command` rebuilds it.
   not altered after the receipt read them.
 
 ## Optional connectors
-- **Email and card alerts:** give the agent its own mailbox and put its IMAP
-  login in the private `.env` (`docs/EMAIL.md`). Sent mail becomes
+All of these are set up from the app's **Settings** page
+(`http://127.0.0.1:8765/settings`, `docs/SETTINGS.md`) — each has a Test
+button — or by hand in the private `.env`.
+- **Email and card alerts:** give the agent its own mailbox and enter its IMAP
+  login (`docs/EMAIL.md`). Sent mail becomes
   `send_email` rows; card-issuer alert emails become `purchase` rows.
 - **Stripe:** a key in `.env` (`docs/STRIPE.md`). Charges the agent collects,
   and purchases on its own Issuing card where Issuing is activated.

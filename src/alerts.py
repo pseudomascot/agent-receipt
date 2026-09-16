@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime
 
 from describe import describe
@@ -106,7 +107,7 @@ def save_settings(conn: sqlite3.Connection, form: dict, user: str) -> dict:
         now, RECEIPT_AGENT, user, "input", "other", f"Changed alert rules: {describe_settings(new)}", 1, "human",
         "the Alert rules form was saved in Agent Receipt; reversibility: can be changed again",
         json.dumps({"source": "agent-receipt", "tool": "agent-receipt:rules", "before": before, "after": new}),
-        f"agent-receipt:rules:{now:.3f}",
+        f"agent-receipt:rules:{now:.3f}:{uuid.uuid4().hex[:8]}",
     ))
     conn.commit()
     return new

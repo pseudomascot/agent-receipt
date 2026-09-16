@@ -31,8 +31,8 @@ def email_settings(env: dict | None = None) -> dict | None:
     """IMAP settings for the agent's mailbox, or None if not configured."""
     env = env if env is not None else load_env()
     user, password = env.get("RECEIPT_IMAP_USER"), env.get("RECEIPT_IMAP_PASSWORD")
-    if not user or not password:
-        return None
+    if not user or not password or "xxxx" in password or user == "agent.mailbox@gmail.com":
+        return None                                   # untouched .env.example placeholders
     return {
         "host": env.get("RECEIPT_IMAP_HOST", "imap.gmail.com"),
         "user": user,
@@ -54,8 +54,8 @@ def stripe_settings(env: dict | None = None) -> dict | None:
     the mode is shown in the agent label so a statement never mixes them up silently."""
     env = env if env is not None else load_env()
     key = env.get("RECEIPT_STRIPE_TEST_KEY") or env.get("RECEIPT_STRIPE_KEY")
-    if not key:
-        return None
+    if not key or key.endswith("..."):
+        return None                                   # untouched .env.example placeholder
     mode = "test" if key.startswith("sk_test_") else "live"
     return {
         "key": key,

@@ -99,11 +99,11 @@ def report(s: dict) -> str:
     lines.append("")
     lines.append("Connectors:")
     lines.append(f"  {'✓' if s['email'] else '·'} Agent mailbox (email + card alerts): "
-                 f"{'configured' if s['email'] else 'not configured — docs/EMAIL.md'}")
-    lines.append(f"  {'✓' if s['stripe'] else '·'} Stripe: {'configured' if s['stripe'] else 'not configured — docs/STRIPE.md'}")
+                 f"{'configured' if s['email'] else 'not set up — Settings page or docs/EMAIL.md'}")
+    lines.append(f"  {'✓' if s['stripe'] else '·'} Stripe: {'configured' if s['stripe'] else 'not set up — Settings page or docs/STRIPE.md'}")
     lines.append(f"  {'✓' if s.get('calendar') else '·'} Calendar (Mac): {'on' if s.get('calendar') else 'off — set RECEIPT_CALENDAR=on (docs/CALENDAR.md)'}")
-    lines.append(f"  {'✓' if s.get('google_calendar') else '·'} Google Calendar: {'configured' if s.get('google_calendar') else 'not configured — docs/GOOGLE_CALENDAR.md'}")
-    lines.append(f"  {'✓' if s.get('ramp') else '·'} Ramp (agent cards): {'configured' if s.get('ramp') else 'not configured — docs/RAMP.md'}")
+    lines.append(f"  {'✓' if s.get('google_calendar') else '·'} Google Calendar: {'configured' if s.get('google_calendar') else 'not set up — Settings page or docs/GOOGLE_CALENDAR.md'}")
+    lines.append(f"  {'✓' if s.get('ramp') else '·'} Ramp (agent cards): {'configured' if s.get('ramp') else 'not set up — Settings page or docs/RAMP.md'}")
     lines.append("")
     acc = s["accessibility"]
     if acc is True:
