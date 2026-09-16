@@ -12,7 +12,7 @@
   <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
   <span class="label" style="margin-left:10px">Rows</span>
   <button type="button" class="chip check" data-toggle-density title="One tight line per action; click a row for its details">Compact</button>
-  <a href="{{ group_toggle_url }}" class="chip check{% if not group_by_project %} off{% endif %}" title="Group actions under the project they happened in; off = one list, newest first">Group by project</a>
+  <a href="{{ group_toggle_url }}" class="chip check{% if not group_by_project %} off{% endif %}" data-keep-scroll title="Group actions under the project they happened in; off = one list, newest first">Group by project</a>
 </div>
 {% endblock %}
 {% block body %}
@@ -278,9 +278,30 @@
 {% endif %}
 </section>
 <script>
-  // Pickers (Project / Agent / User dropdowns): choosing an entry opens the filtered page.
-  document.querySelectorAll("select[data-pick]").forEach(function (sel) {
-    sel.addEventListener("change", function () { if (sel.value) window.location.href = sel.value; });
-  });
+  // Pickers and filter chips reload the page with a new filter. Remember the scroll position
+  // and drop the #actions anchor so the list changes in place instead of jumping.
+  (function () {
+    var KEY = "ar.scroll:" + location.pathname;
+    function go(url) {
+      try { sessionStorage.setItem(KEY, String(window.scrollY)); } catch (e) {}
+      window.location.href = url.replace(/#actions$/, "");
+    }
+    document.querySelectorAll("select[data-pick]").forEach(function (sel) {
+      sel.addEventListener("change", function () { if (sel.value) go(sel.value); });
+    });
+    document.querySelectorAll(".filters a.chip[href], a[data-keep-scroll]").forEach(function (a) {
+      a.addEventListener("click", function (ev) { ev.preventDefault(); go(a.getAttribute("href")); });
+    });
+    var form = document.querySelector("form.filters");
+    if (form) form.addEventListener("submit", function () { try { sessionStorage.setItem(KEY, String(window.scrollY)); } catch (e) {} });
+    try {
+      var y = sessionStorage.getItem(KEY);
+      if (y !== null && !location.hash) {
+        if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+        window.scrollTo(0, parseInt(y, 10) || 0);
+        sessionStorage.removeItem(KEY);
+      }
+    } catch (e) {}
+  })();
 </script>
 {% endblock %}
