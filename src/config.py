@@ -7,7 +7,8 @@ stored in the database, or shown on the page.
 import os
 from pathlib import Path
 
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+# RECEIPT_ENV_FILE points the app at a different settings file (the demo uses examples/demo.env).
+ENV_PATH = Path(os.environ.get("RECEIPT_ENV_FILE") or Path(__file__).resolve().parent.parent / ".env")
 
 
 def load_env(path: Path = ENV_PATH) -> dict:

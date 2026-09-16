@@ -6,8 +6,8 @@ Everything in it is invented: a small plumbing business, "Harbor Plumbing", with
 bookkeeping agent that has its own mailbox and Ramp card, a coding agent working on
 the website, a scheduled Cowork task that ran at 3 a.m., a sub-agent, a Cursor edit,
 one purchase by a person, one unexplained email, and the alerts those produce.
-It never touches agent_receipt.db (the real statement). The Settings page on the
-demo server still reflects this Mac's real connector setup; every other page is demo.
+It never touches agent_receipt.db (the real statement) or your .env: the demo server
+reads examples/demo.env, so Settings, Agents and Coverage all show the demo story.
 """
 
 import json
@@ -18,6 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+import os  # noqa: E402
+os.environ.setdefault("RECEIPT_ENV_FILE", str(ROOT / "examples" / "demo.env"))   # the demo's own settings, not yours
 
 from agents import set_nickname  # noqa: E402
 from alerts import evaluate  # noqa: E402

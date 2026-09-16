@@ -55,7 +55,7 @@ calm pace. Square or vertical crop works: every shot is one card of the app.
 Agent Receipt — a bank statement for what your AI agents did. Finds Claude Code, Cursor, Codex and Cowork on your Mac automatically; connects to the agent's own mailbox, card (Ramp), calendar and GitHub. Flags what needs a look, stops an agent in one click, exports for your bookkeeper. Free, open source, local-only. github.com/pseudomascot/agent-receipt
 
 ## Recording notes
-- Use the demo dataset (ask for it) so every screen tells the story without your real project names.
+- Use the demo: `.venv/bin/python examples/demo_data.py` builds a throwaway receipt for "Harbor Plumbing" and serves it at http://127.0.0.1:8767/ — every screen tells the story without your real project names. Your real app on 8765 is untouched.
 - Dark mode reads better on phones; keep the browser at ~1100 px wide so the one-line rows stay one line.
 - Each shot is one page of the app — no scrolling mid-shot except the statement list.
 - Say the numbers slowly; "within five minutes" and "nothing leaves it" are the two lines people remember.
