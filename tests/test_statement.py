@@ -123,9 +123,9 @@ def test_actions_are_newest_first(tmp_path):
     assert "<h3>proj-a" not in html and "<th>Project</th>" in html
     assert html.index("git commit -m hi") < html.index("python3 build.py") < html.index("src/&lt;script&gt;")
     assert 'title="proj-b">proj-b</td>' in html
-    assert "&group=project#actions" in html and 'class="chip check off"' in html               # the toggle, off
+    assert 'href="/day/2026-09-14?group=project#actions" class="chip check off"' in html        # the toggle, off
     html = client.get(f"/day/{DAY}?group=project&type=execute").get_data(as_text=True)
-    assert "<h3>proj-a" in html and 'href="/day/2026-09-14?&type=execute#actions" class="chip check"' in html   # toggle keeps the filter
+    assert "<h3>proj-a" in html and 'href="/day/2026-09-14?type=execute#actions" class="chip check"' in html   # toggle keeps the filter
 
 
 def test_day_page_type_filter(tmp_path):

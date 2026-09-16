@@ -12,7 +12,7 @@
   <button type="button" class="chip check" data-toggle-section="coverage">Coverage</button>
   <span class="label" style="margin-left:10px">Rows</span>
   <button type="button" class="chip check" data-toggle-density title="One tight line per action; click a row for its details">Compact</button>
-  <a href="{{ base_url }}?{{ keep_type }}{{ keep_agent }}{{ keep_user }}{% if not group_by_project %}&group=project{% endif %}#actions" class="chip check{% if not group_by_project %} off{% endif %}" title="Group actions under the project they happened in; off = one list, newest first">Group by project</a>
+  <a href="{{ group_toggle_url }}" class="chip check{% if not group_by_project %} off{% endif %}" title="Group actions under the project they happened in; off = one list, newest first">Group by project</a>
 </div>
 {% endblock %}
 {% block body %}

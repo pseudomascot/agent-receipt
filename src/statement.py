@@ -78,12 +78,17 @@ def create_app(db_path: Path = DB_PATH, summaries_dir: Path = SUMMARIES_DIR) -> 
         finally:
             conn.close()
         summary_file = summaries_dir / f"{start.isoformat()}.txt"
+        grouped = request.args.get("group") == "project"
+        toggle_args = {k: v for k, v in request.args.items() if k != "group"}
+        if not grouped:
+            toggle_args["group"] = "project"
+        group_toggle_url = base_url + ("?" + urlencode(toggle_args) if toggle_args else "") + "#actions"
         return render_template(
-            "statement.html", coverage_notes=coverage_notes(),
+            "statement.html", coverage_notes=coverage_notes(), group_toggle_url=group_toggle_url,
             summary=summary_text(data, integrity, open_alerts, names),
             summary_saved=data["single_day"] and summary_file.exists(), base_url=base_url,
             integrity=integrity, alerted=alerted, nav=nav, query=request.query_string.decode(),
-            retired=retired, group_by_project=request.args.get("group") == "project", **data)
+            retired=retired, group_by_project=grouped, **data)
 
     @app.route("/")
     def index():
